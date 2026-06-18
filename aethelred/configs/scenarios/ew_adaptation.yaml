@@ -1,0 +1,15 @@
+description: Electronic warfare adaptation - enemy deploys jamming and spoofing
+battlefield:
+  terrain_type: urban
+  terrain_seed: 456
+swarm:
+  num_recon: 4
+  num_engage: 4
+  num_ew: 4
+  num_relay: 3
+threats:
+  initial_threats: 4
+  max_threats: 8
+  spawn_interval: 60
+  default_profile: ew_attack
+max_steps: 600

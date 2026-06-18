@@ -1,0 +1,15 @@
+description: Basic patrol scenario with static enemy positions
+battlefield:
+  terrain_type: flat
+  terrain_seed: 42
+swarm:
+  num_recon: 3
+  num_engage: 4
+  num_ew: 1
+  num_relay: 1
+threats:
+  initial_threats: 3
+  max_threats: 5
+  spawn_interval: 100
+  default_profile: static
+max_steps: 300

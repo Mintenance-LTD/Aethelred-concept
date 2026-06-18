@@ -1,0 +1,19 @@
+description: "Ambush defense - high-lethality concealed positions with overlapping kill zones"
+battlefield:
+  terrain_type: forest
+  terrain_seed: 123
+physics:
+  hit_probability_base: 0.45
+  damage_per_hit: 0.4
+  cover_damage_reduction: 0.3
+swarm:
+  num_recon: 5
+  num_engage: 8
+  num_ew: 2
+  num_relay: 2
+threats:
+  initial_threats: 6
+  max_threats: 14
+  spawn_interval: 30
+  default_profile: ambush
+max_steps: 600

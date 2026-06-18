@@ -1,0 +1,26 @@
+# Survival-focused training config (demonstrates PPO improving survival).
+# Reproduce: python scripts/train.py --config configs/survival_train.yaml --episodes 120 --no-noise --seed 5
+# On seed 5 this took the policy from ~50% to ~71% survival (deterministic eval).
+device: cpu
+checkpoint_dir: checkpoints/survival_demo
+simulation:
+  max_steps: 100
+  physics:
+    hit_probability_base: 0.55
+    damage_per_hit: 0.45
+  threats:
+    initial_threats: 6
+    max_threats: 12
+    spawn_interval: 20
+    default_profile: aggressive
+  reward_weights:        # sharp "don't lose units" signal
+    survival: 1.0
+    loss_penalty: 4.0
+    mission_progress: 0.0
+    threat_neutralized: 0.0
+    efficiency: 0.0
+    adaptation_bonus: 0.0
+training:
+  update_interval: 64
+  learning_rate: 0.002
+  entropy_coef: 0.15     # strong exploration so PPO discovers the evade behavior

@@ -1,0 +1,48 @@
+project_name: aethelred
+device: cpu
+log_level: INFO
+
+simulation:
+  battlefield:
+    width: 1000.0
+    height: 1000.0
+    grid_resolution: 50
+    terrain_type: mixed
+    terrain_seed: 42
+  physics:
+    dt: 0.1
+    hit_probability_base: 0.3
+    cover_damage_reduction: 0.5
+    fuel_consumption_rate: 0.001
+    damage_per_hit: 0.3
+  swarm:
+    num_recon: 4
+    num_engage: 6
+    num_ew: 2
+    num_relay: 2
+    initial_formation: diamond
+  threats:
+    initial_threats: 3
+    max_threats: 10
+    spawn_interval: 50
+    default_profile: patrol
+  max_steps: 500
+
+tactical_ai:
+  state_embed_dim: 256
+  action_embed_dim: 64
+  hidden_dim: 256
+  num_heads: 8
+  num_layers: 6
+  context_length: 20
+  dropout: 0.1
+
+adaptation:
+  enable_maml: true
+  enable_ewc: true
+  replay_buffer_capacity: 10000
+
+learning_loop:
+  loss_threshold: 3
+  adaptation_interval: 100
+  enable_prediction: true
