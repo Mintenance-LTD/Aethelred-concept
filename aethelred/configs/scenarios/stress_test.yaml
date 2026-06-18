@@ -1,0 +1,22 @@
+description: "Stress test - maximum lethality, mixed threat types, rapid spawning, smaller AO"
+battlefield:
+  width: 800.0
+  height: 800.0
+  terrain_type: urban
+  terrain_seed: 999
+physics:
+  hit_probability_base: 0.55
+  damage_per_hit: 0.5
+  cover_damage_reduction: 0.2
+  fuel_consumption_rate: 0.002
+swarm:
+  num_recon: 6
+  num_engage: 10
+  num_ew: 3
+  num_relay: 3
+threats:
+  initial_threats: 8
+  max_threats: 20
+  spawn_interval: 20
+  default_profile: aggressive
+max_steps: 800
