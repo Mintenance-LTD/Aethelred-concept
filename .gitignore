@@ -1,0 +1,33 @@
+# Local tooling / session state (not part of the project)
+.claude/
+.remember/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+.eggs/
+.venv/
+venv/
+env/
+.env
+
+# ML artifacts (models, logs, datasets)
+*.pt
+*.pth
+checkpoints/
+runs/
+data/
+
+# Caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# OS
+.DS_Store
+Thumbs.db
