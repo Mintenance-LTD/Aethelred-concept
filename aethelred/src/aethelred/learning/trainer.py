@@ -58,9 +58,13 @@ class RolloutBuffer:
         return len(self.steps)
 
     def compute_gae(
-        self, gamma: float = 0.99, lam: float = 0.95
+        self, gamma: float = 0.99, lam: float = 0.95, reward_scale: float = 1.0
     ) -> tuple[list[float], list[float]]:
-        """Compute Generalized Advantage Estimation."""
+        """Compute Generalized Advantage Estimation.
+
+        ``reward_scale`` divides rewards into the value head's (normalized) units;
+        since stored ``step.value`` is already in that scale, GAE stays consistent.
+        """
         advantages = []
         returns = []
         gae = 0.0
@@ -71,13 +75,24 @@ class RolloutBuffer:
                 next_value = 0.0
                 gae = 0.0
 
-            delta = step.reward + gamma * next_value - step.value
+            delta = step.reward * reward_scale + gamma * next_value - step.value
             gae = delta + gamma * lam * gae
             advantages.insert(0, gae)
             returns.insert(0, gae + step.value)
             next_value = step.value
 
         return advantages, returns
+
+    def discounted_return_std(self, gamma: float = 0.99) -> float:
+        """Std of per-step discounted raw-reward sums (for reward normalization)."""
+        rets = []
+        running = 0.0
+        for step in reversed(self.steps):
+            if step.done:
+                running = 0.0
+            running = step.reward + gamma * running
+            rets.append(running)
+        return float(np.std(rets)) if rets else 1.0
 
 
 class ValueHead(nn.Module):
@@ -301,12 +316,20 @@ class PPOTrainer:
             input_dim=policy.config.state_embed_dim
         ).to(self.device)
 
-        # Optimizer covers policy + value head
+        # Auxiliary head: predicts the threat-type composition from the state
+        # embedding. Its supervised loss forces the encoder to actually represent
+        # WHICH threats are present — breaking the representational collapse where
+        # winnable and deadly states map to identical embeddings (so PPO can never
+        # learn a state-dependent response). 6 = len(ThreatType).
+        self.aux_head = nn.Linear(policy.config.state_embed_dim, 6).to(self.device)
+
+        # Optimizer covers policy + value head + aux head
         self.optimizer = torch.optim.AdamW(
             [
                 {"params": policy.state_encoder.parameters(), "lr": config.learning_rate},
                 {"params": policy.transformer.parameters(), "lr": config.learning_rate},
                 {"params": self.value_head.parameters(), "lr": config.learning_rate * 3},
+                {"params": self.aux_head.parameters(), "lr": config.learning_rate * 3},
             ],
             weight_decay=config.weight_decay,
         )
@@ -328,6 +351,7 @@ class PPOTrainer:
         # forward_step uses a consistent RTG for both training and inference.
         self.policy.set_target_return(config.target_return)
         self._pending: Optional[tuple] = None
+        self._ret_std = 1.0  # running std of returns for reward normalization
 
         # Curriculum
         self._curriculum: list[CurriculumStage] = []
@@ -457,9 +481,22 @@ class PPOTrainer:
         self.policy.transformer.train()
         self.value_head.train()
 
-        # Compute advantages with GAE
+        # Reward normalization: keep value targets / advantages well-scaled so a
+        # large-magnitude, high-variance reward can't swamp learning. Scale rewards
+        # by a running std of discounted returns (EMA).
+        reward_scale = 1.0
+        if self.config.normalize_rewards:
+            batch_std = self.rollout_buffer.discounted_return_std(self.config.gamma)
+            if batch_std > 1e-6:
+                # Snap on the first update, then track slowly.
+                self._ret_std = batch_std if self._ret_std == 1.0 else (
+                    0.99 * self._ret_std + 0.01 * batch_std
+                )
+            reward_scale = 1.0 / max(self._ret_std, 1e-6)
+
+        # Compute advantages with GAE (rewards scaled into value-head units)
         advantages, returns = self.rollout_buffer.compute_gae(
-            gamma=self.config.gamma, lam=self.config.gae_lambda
+            gamma=self.config.gamma, lam=self.config.gae_lambda, reward_scale=reward_scale
         )
 
         advantages_t = torch.tensor(advantages, dtype=torch.float32, device=self.device)
@@ -511,11 +548,12 @@ class PPOTrainer:
                 entropy = entropy.mean()
                 new_values = self.value_head(state_embeds)
 
-                # PPO clipped objective
+                # PPO clipped objective. Clamp the log-ratio before exp() so a
+                # large policy shift can't overflow to inf -> NaN gradients.
                 idx_t = torch.tensor(batch_idx, device=self.device)
                 batch_adv = advantages_t[idx_t]
                 batch_old_lp = old_log_probs[idx_t]
-                ratio = torch.exp(new_log_probs - batch_old_lp)
+                ratio = torch.exp((new_log_probs - batch_old_lp).clamp(-10.0, 10.0))
                 surr1 = ratio * batch_adv
                 surr2 = torch.clamp(
                     ratio, 1.0 - self.config.ppo_clip_ratio, 1.0 + self.config.ppo_clip_ratio
@@ -533,20 +571,48 @@ class PPOTrainer:
                 v_loss2 = F.mse_loss(value_clipped, batch_returns)
                 value_loss = torch.max(v_loss1, v_loss2)
 
+                # Auxiliary representation loss: make the encoder predict the
+                # threat-type composition (fraction of each type among active
+                # threats) from the state embedding. Forces the embedding to carry
+                # threat identity so value/policy CAN become state-dependent.
+                aux_loss = torch.zeros((), device=self.device)
+                if self.config.aux_coef > 0.0:
+                    threats = obs_batch["threats"]          # (B, max_t, feat)
+                    tmask = obs_batch["threat_mask"].float()  # (B, max_t)
+                    type_oh = threats[:, :, 8:14]           # (B, max_t, 6) type one-hots
+                    counts = (type_oh * tmask.unsqueeze(-1)).sum(dim=1)  # (B, 6)
+                    denom = tmask.sum(dim=1, keepdim=True).clamp(min=1.0)
+                    aux_target = counts / denom             # (B, 6) type fractions
+                    aux_pred = self.aux_head(state_embeds)
+                    aux_loss = F.mse_loss(aux_pred, aux_target)
+
                 loss = (
                     policy_loss
                     + self.config.value_coef * value_loss
                     - self.config.entropy_coef * entropy
+                    + self.config.aux_coef * aux_loss
                 )
+
+                # Skip degenerate updates rather than poisoning the weights with
+                # NaN/inf (which would make action sampling crash downstream).
+                if not torch.isfinite(loss):
+                    logger.warning("Non-finite PPO loss; skipping minibatch")
+                    self.optimizer.zero_grad(set_to_none=True)
+                    continue
 
                 self.optimizer.zero_grad()
                 loss.backward()
                 grad_norm = torch.nn.utils.clip_grad_norm_(
                     list(self.policy.state_encoder.parameters())
                     + list(self.policy.transformer.parameters())
-                    + list(self.value_head.parameters()),
+                    + list(self.value_head.parameters())
+                    + list(self.aux_head.parameters()),
                     self.config.gradient_clip,
                 )
+                if not torch.isfinite(grad_norm):
+                    logger.warning("Non-finite grad norm; skipping optimizer step")
+                    self.optimizer.zero_grad(set_to_none=True)
+                    continue
                 self._apply_lr_schedule()
                 self.optimizer.step()
                 self._total_opt_steps += 1

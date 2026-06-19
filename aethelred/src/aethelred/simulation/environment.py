@@ -12,6 +12,7 @@ import numpy as np
 from aethelred.config.settings import SimulationConfig
 from aethelred.core.enums import (
     DroneRole,
+    EngagementOutcome,
     FormationType,
     TacticalActionType,
     ThreatType,
@@ -197,7 +198,7 @@ class AethelredEnv(gym.Env):
         self._current_state = self._build_state()
 
         # Compute reward
-        reward = self._compute_reward(state_before, self._current_state, losses)
+        reward = self._compute_reward(state_before, self._current_state, losses, engagements)
         self._total_reward += reward
 
         # Termination
@@ -287,10 +288,11 @@ class AethelredEnv(gym.Env):
         formation = formations[int(action.get("formation", 0)) % len(formations)]
         active_threats = self.entity_manager.get_active_threats()
 
+        autonomy = self.config.swarm.autonomy_enabled
         actions: list[TacticalAction] = []
         engage_i = 0
         for drone in self.entity_manager.get_active_drones():
-            comm = self._comm_status_for(drone)
+            comm = self._comm_status_for(drone) if autonomy else "connected"
             if comm == "connected":
                 # Commanded by the mother: role-based decomposition.
                 unit = self._decode_unit_action(
@@ -350,20 +352,21 @@ class AethelredEnv(gym.Env):
     def _decode_unit_action(
         self, drone, cmd, target_pos, formation, priority, active_threats, engage_i
     ) -> TacticalAction:
-        """Role-specialized expansion of the high-level command for one drone."""
+        """Role-specialized expansion of the high-level command for one drone.
+
+        The policy is authoritative: ENGAGE units prosecute threats ONLY when the
+        command is ENGAGE, and otherwise obey the commanded action (evade, hold,
+        retreat, move). This makes the fight/withdraw decision a learned choice
+        rather than a hardcoded reflex.
+        """
         base = dict(target_unit_id=drone.id, formation=formation, priority=priority)
 
         # Retreat is obeyed by everyone regardless of role.
         if cmd == TacticalActionType.RETREAT:
             return TacticalAction(action_type=TacticalActionType.RETREAT, target_position=target_pos, **base)
 
-        # ENGAGE units prosecute threats by default (that is their role); the
-        # high-level command only pulls them off when it orders EVADE/RETREAT.
-        if drone.role == DroneRole.ENGAGE and active_threats:
-            if cmd == TacticalActionType.EVADE:
-                return TacticalAction(
-                    action_type=TacticalActionType.EVADE, target_position=target_pos, **base
-                )
+        # ENGAGE units prosecute threats only when explicitly commanded to.
+        if drone.role == DroneRole.ENGAGE and active_threats and cmd == TacticalActionType.ENGAGE:
             threat = active_threats[engage_i % len(active_threats)]
             dist = drone.position.distance_to(threat.position)
             if dist <= drone.sensor_range and drone.ammo > 0.0:
@@ -379,13 +382,12 @@ class AethelredEnv(gym.Env):
                 target_threat_id=threat.id, **base,
             )
 
+        # Recon scouts (toward anticipated threats for early warning) unless evading.
         if drone.role == DroneRole.RECON:
             if cmd == TacticalActionType.EVADE:
                 return TacticalAction(
                     action_type=TacticalActionType.EVADE, target_position=target_pos, **base
                 )
-            # Pre-position toward anticipated threats (opponent-model predictions)
-            # for early warning; otherwise scout toward the objective.
             recon_target = self._nearest_anticipated(drone.position) or target_pos
             return TacticalAction(
                 action_type=TacticalActionType.RECON, target_position=recon_target, **base
@@ -397,7 +399,7 @@ class AethelredEnv(gym.Env):
         if drone.role == DroneRole.RELAY:
             return TacticalAction(action_type=TacticalActionType.RELAY, target_position=target_pos, **base)
 
-        # Fallback: obey the high-level command directly
+        # Engage units not told to engage, plus any other case: obey the command.
         return TacticalAction(action_type=cmd, target_position=target_pos, **base)
 
     def _compute_reward(
@@ -405,6 +407,7 @@ class AethelredEnv(gym.Env):
         state_before: BattlefieldState,
         state_after: BattlefieldState,
         losses: list[LossEvent],
+        engagements: Optional[list] = None,
     ) -> float:
         """Compute composite reward."""
         w = self.config.reward_weights
@@ -419,10 +422,14 @@ class AethelredEnv(gym.Env):
         # Loss penalty (weight configurable via reward_weights["loss_penalty"])
         reward -= len(losses) * w.get("loss_penalty", 0.3)
 
-        # Threat neutralization
-        threats_before = len(state_before.active_threats)
-        threats_after = len(state_after.active_threats)
-        threats_killed = threats_before - threats_after
+        # Threat neutralization — credit GROSS kills this step (threats actually
+        # destroyed), not the net threat-count change, which respawns cancel out.
+        if engagements is not None:
+            threats_killed = sum(
+                1 for e in engagements if e.outcome == EngagementOutcome.TARGET_DESTROYED
+            )
+        else:
+            threats_killed = max(0, len(state_before.active_threats) - len(state_after.active_threats))
         reward += w.get("threat_neutralized", 0.8) * threats_killed * 0.5
 
         # Mission progress
