@@ -38,6 +38,9 @@ class SwarmConfig:
     num_ew: int = 2
     num_relay: int = 2
     initial_formation: str = "diamond"
+    # When False, every unit obeys the central command (no comms-loss autonomy
+    # fallback) — used to give the learned policy full authority in experiments.
+    autonomy_enabled: bool = True
 
     @property
     def total_units(self) -> int:
@@ -155,6 +158,8 @@ class TrainerConfig:
     value_coef: float = 0.5
     target_return: float = 10.0  # return-to-go conditioning for the policy
     update_interval: int = 256  # steps collected before a PPO update
+    normalize_rewards: bool = True  # scale rewards by running return std (stability)
+    aux_coef: float = 0.0  # weight of the threat-composition auxiliary loss (0 = off)
     device: str = "cpu"
 
 

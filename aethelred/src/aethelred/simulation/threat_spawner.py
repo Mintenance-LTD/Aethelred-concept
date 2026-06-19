@@ -77,7 +77,31 @@ TACTIC_PROFILES: dict[str, EnemyTacticProfile] = {
         engagement_range=120.0,
         spawn_pattern="perimeter",
     ),
+    # --- Experiment profiles: a winnable vs a deadly opposition. The optimal
+    # response differs (engage the small-arms / withdraw from the long-range AA),
+    # so a state-dependent policy can beat any single constant action. ---
+    "exp_winnable": EnemyTacticProfile(
+        name="exp_winnable",
+        threat_types=[ThreatType.SMALL_ARMS],   # range 45 < engage sensor 80 -> safe kills
+        behavior="static",
+        aggression=0.6,
+        speed=0.0,
+        engagement_range=45.0,
+        spawn_pattern="clustered",
+    ),
+    "exp_deadly": EnemyTacticProfile(
+        name="exp_deadly",
+        threat_types=[ThreatType.AA_MISSILE],   # range 140 >> engage 80 -> must withdraw
+        behavior="static",
+        aggression=0.9,
+        speed=0.0,
+        engagement_range=140.0,
+        spawn_pattern="clustered",
+    ),
 }
+
+# Per-episode opposition for the "random_mix" profile (state-dependent optimum).
+RANDOM_MIX_POOL = ["exp_winnable", "exp_deadly"]
 
 
 class ThreatSpawner:
@@ -96,6 +120,11 @@ class ThreatSpawner:
         self._rng = rng or np.random.default_rng()
         self._patrol_waypoints.clear()
         self._patrol_indices.clear()
+        # "random_mix" draws a fresh opposition each episode so the optimal
+        # response is state-dependent rather than a single fixed action.
+        if self.config.default_profile == "random_mix":
+            choice = RANDOM_MIX_POOL[int(self._rng.integers(len(RANDOM_MIX_POOL)))]
+            self.active_profile = TACTIC_PROFILES[choice]
 
     def spawn_initial_threats(
         self, entity_manager: EntityManager, battlefield: Battlefield, timestep: int = 0

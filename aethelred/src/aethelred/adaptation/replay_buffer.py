@@ -42,7 +42,9 @@ class PrioritizedReplayBuffer:
     def add(self, experience: Experience, priority: Optional[float] = None) -> None:
         """Add an experience with optional priority."""
         if priority is None:
-            # Loss events get higher priority
+            # Loss events get a fixed 2x emphasis over the running max. This must
+            # NOT feed back into _max_priority (below) or the bonus compounds every
+            # add and overflows to inf -> NaN sampling probabilities.
             priority = self._max_priority * 2.0 if experience.loss_event else self._max_priority
 
         if len(self._buffer) < self.capacity:
@@ -52,7 +54,9 @@ class PrioritizedReplayBuffer:
 
         self._priorities[self._position] = priority ** self.alpha
         self._position = (self._position + 1) % self.capacity
-        self._max_priority = max(self._max_priority, priority)
+        # NOTE: deliberately do NOT update _max_priority from the loss-event bonus
+        # here — that compounded every add and overflowed. _max_priority is raised
+        # only by update_priorities() from real (bounded) TD-error priorities.
 
     def sample(
         self, batch_size: int, beta: float = 0.4
@@ -64,7 +68,11 @@ class PrioritizedReplayBuffer:
 
         batch_size = min(batch_size, n)
         priorities = self._priorities[:n]
-        probs = priorities / (priorities.sum() + 1e-8)
+        total = priorities.sum()
+        if not np.isfinite(total) or total <= 0:
+            probs = np.full(n, 1.0 / n)  # degenerate priorities -> uniform
+        else:
+            probs = priorities / total
 
         indices = np.random.choice(n, size=batch_size, p=probs, replace=False)
         experiences = [self._buffer[i] for i in indices]

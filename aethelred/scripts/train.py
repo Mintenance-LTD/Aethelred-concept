@@ -90,6 +90,7 @@ def train(
     resume_path: str | None = None,
     noise: bool = True,
     fixed_seed: int | None = None,
+    no_adapt: bool = False,
 ) -> None:
     """Main training loop.
 
@@ -226,7 +227,7 @@ def train(
             safety.post_decision(env._decode_action(gym_action), clean_state)
 
             # Phase 5 consumption: pre-position recon toward predicted threats
-            if learning_loop.config.enable_prediction:
+            if not no_adapt and learning_loop.config.enable_prediction:
                 env.set_anticipated_threats([
                     p.predicted_position for p in learning_loop.get_predictions(clean_state)
                 ])
@@ -238,23 +239,26 @@ def train(
             # Commit the step (reward now known) to the PPO rollout
             trainer.finish_step(reward, done)
 
-            # Learning loop (adaptation) bookkeeping on the post-step state
-            new_state = env.get_current_state()
-            if new_state is not None:
-                learning_loop.on_step(new_state, reward)
+            # Track losses (for logging)
             new_total = info["total_losses"]
             if new_total > prev_total_losses:
-                for loss in env.get_losses_since(step - 1):
-                    learning_loop.on_loss(loss)
-                    episode_losses += 1
+                episode_losses += new_total - prev_total_losses
+
+            # Online adaptation bookkeeping (skipped in pure-PPO --no-adapt mode,
+            # which isolates the PPO learner from the adaptation engine).
+            if not no_adapt:
+                new_state = env.get_current_state()
+                if new_state is not None:
+                    learning_loop.on_step(new_state, reward)
+                if new_total > prev_total_losses:
+                    for loss in env.get_losses_since(step - 1):
+                        learning_loop.on_loss(loss)
+                all_eng = env.get_all_engagements()
+                learning_loop.on_engagements(all_eng[prev_engagements:])
+                prev_engagements = len(all_eng)
+                learning_loop.maybe_adapt()
+
             prev_total_losses = new_total
-
-            # Record threats the swarm neutralized this step (updates mastery)
-            all_eng = env.get_all_engagements()
-            learning_loop.on_engagements(all_eng[prev_engagements:])
-            prev_engagements = len(all_eng)
-
-            learning_loop.maybe_adapt()
 
             # Run a PPO update once enough experience is collected
             if trainer.ready_to_update:
@@ -367,6 +371,8 @@ def main() -> None:
     parser.add_argument("--device", type=str, default=None, help="cpu or cuda")
     parser.add_argument("--seed", type=int, default=None,
                         help="Fixed scenario seed every episode (for learning sanity checks)")
+    parser.add_argument("--no-adapt", action="store_true",
+                        help="Disable the online adaptation engine (train pure PPO)")
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -392,6 +398,7 @@ def main() -> None:
         resume_path=args.resume,
         noise=not args.no_noise,
         fixed_seed=args.seed,
+        no_adapt=args.no_adapt,
     )
 
 
