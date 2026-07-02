@@ -49,6 +49,10 @@ class LearningLoop:
         self._total_steps = 0
         self._total_adaptations = 0
         self._propagation_callback = None  # set by swarm coordinator
+        # If False, adaptation still runs (classifier/counter-bank/EWC/opponent
+        # model update) but the live policy weights are left untouched, so a
+        # concurrent optimizer (PPO) is never fought over the same parameters.
+        self._apply_weight_updates = getattr(config, "apply_weight_updates", True)
 
     # --- Phase 1: Observation ---
 
@@ -115,24 +119,28 @@ class LearningLoop:
             losses=self.pending_losses,
         )
 
-        # Load adapted weights into policy
-        # We need to wrap them with the encoder/transformer prefixes
+        # Wrap adapted weights with the encoder/transformer prefixes (encoder
+        # weights unchanged). Only write them into the live policy when we are the
+        # authoritative writer — during PPO training the optimizer owns the
+        # weights and a mid-rollout overwrite would invalidate the on-policy data
+        # and the optimizer moments (audit C5), so we skip the write there.
         adapted_weights = {}
         for name, param in result.updated_weights.items():
             adapted_weights[f"transformer.{name}"] = param
-        # Keep encoder weights unchanged
         for name, param in self.tactical_policy.state_encoder.named_parameters():
             adapted_weights[f"encoder.{name}"] = param.data.clone()
 
-        self.tactical_policy.load_policy_weights(adapted_weights)
+        if self._apply_weight_updates:
+            self.tactical_policy.load_policy_weights(adapted_weights)
 
         logger.info(
             f"[PHASE 3] Adaptation via {result.method}: "
             f"loss {result.loss_before:.4f} -> {result.loss_after:.4f}"
+            f"{'' if self._apply_weight_updates else ' (weights not applied)'}"
         )
 
         # Phase 4: Propagation
-        if self._propagation_callback is not None:
+        if self._apply_weight_updates and self._propagation_callback is not None:
             delta = self.adaptation_engine.get_model_delta(
                 original_weights, adapted_weights
             )

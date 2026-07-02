@@ -64,6 +64,10 @@ class AethelredEnv(gym.Env):
         self._autonomous_units: dict[UUID, SwarmUnit] = {}
         # Anticipated threat positions (from the opponent model) for pre-positioning.
         self._anticipated_threats: list[Vec2] = []
+        # Optional Simple-Domain reflex: (drone, active_threats) -> override action
+        # or None. When set, it can veto the per-unit command to keep a unit out of
+        # an unmastered threat's kill range (survival floor). Default off.
+        self._shield: Optional[Any] = None
 
         self._step_count = 0
         self._total_reward = 0.0
@@ -301,6 +305,12 @@ class AethelredEnv(gym.Env):
             else:
                 # Out of comms / jammed: the unit decides locally (autonomy).
                 unit = self._autonomous_action(drone, comm, active_threats)
+            # Simple-Domain survival floor: veto the command if it leaves the unit
+            # inside an unmastered threat's kill range.
+            if self._shield is not None:
+                override = self._shield(drone, active_threats)
+                if override is not None:
+                    unit = override
             if drone.role == DroneRole.ENGAGE:
                 engage_i += 1
             actions.append(unit)
@@ -348,6 +358,14 @@ class AethelredEnv(gym.Env):
     def set_anticipated_threats(self, positions: list[Vec2]) -> None:
         """Supply predicted threat positions (opponent model) for pre-positioning."""
         self._anticipated_threats = list(positions)
+
+    def set_shield(self, shield: Optional[Any]) -> None:
+        """Attach a Simple-Domain reflex ``shield(drone, active_threats) -> action``.
+
+        Returning an action overrides that unit's command for the step; returning
+        ``None`` leaves the command untouched. Pass ``None`` to detach.
+        """
+        self._shield = shield
 
     def _decode_unit_action(
         self, drone, cmd, target_pos, formation, priority, active_threats, engage_i

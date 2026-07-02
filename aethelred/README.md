@@ -115,6 +115,32 @@ a sharp `loss_penalty` plus strong `entropy_coef` (exploration) is needed for PP
 discover the evade/withdraw behavior. Checkpoints are selected by single-episode reward,
 which is noisy — the latest checkpoint is often a better survival policy than `best_policy.pt`.
 
+### Divine adaptive engine (post-audit improvements)
+
+Following the algorithm audit (`../ALGORITHM_AUDIT.md`), the adaptation path was
+reworked so it stops fighting the PPO optimizer and starts learning real counters:
+
+- **Counter bank (`adaptation/counter_bank.py`):** a per-threat contextual bandit
+  over the eight high-level actions. It learns which action actually counters each
+  threat *from observed outcomes*, only trusts a counter once the "wheel has
+  turned" enough times, and — being a table — never catastrophically forgets one.
+  Exposed via `AdaptationEngine.recommend_counter` / `mastery_of` / `record_outcome`.
+- **No more domain clash (audit C5):** during PPO training the learning loop no
+  longer overwrites the live policy weights mid-rollout (`apply_weight_updates`
+  is forced off in `scripts/train.py`); the optimizer is the sole writer. The
+  standalone learning-loop demo keeps the weight write for illustration.
+- **Simple Domain survival floor (`deployment/safety.py::SimpleDomain`):** an
+  opt-in reflex (`--simple-domain`) that pushes any unit sitting inside the kill
+  range of an *unmastered* threat back out (EVADE), so exploration against a
+  lethal threat can't collect a free kill on our units. Mastery comes from the
+  counter bank, so the shield relaxes automatically as the engine learns.
+- **Cleaner PPO signal (audit C2):** the PPO objective scores only the action
+  factor the environment consumes (`action_type`) by default; the inert
+  `formation`/`target_index` factors are excluded unless
+  `ppo_include_inert_factors` is set.
+- **Double-fed losses fixed (audit H4):** online adaptation now sees each loss
+  event once.
+
 ### Known remaining work (design notes, not bugs)
 
 - `ModelExporter` uses `torch.jit.trace`, which bakes in trace-time control flow;

@@ -9,6 +9,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from aethelred.adaptation.counter_bank import CounterBank
 from aethelred.adaptation.ewc import EWCRegularizer
 from aethelred.adaptation.maml import MAMLAdapter
 from aethelred.adaptation.replay_buffer import Experience, PrioritizedReplayBuffer
@@ -19,6 +20,7 @@ from aethelred.core.events import EngagementEvent, LossEvent
 
 # Index of each action type in the head's output space (matches enum order).
 _ACTION_INDEX = {a: i for i, a in enumerate(TacticalActionType)}
+_ENGAGE_INDEX = _ACTION_INDEX[TacticalActionType.ENGAGE]
 
 
 @dataclass
@@ -65,6 +67,11 @@ class AdaptationEngine:
             alpha=config.replay_alpha,
         )
         self.threat_classifier = HierarchicalThreatClassifier()
+        # Non-parametric outcome memory: learns which action counters each threat
+        # from observed results and never forgets. Consumed as a recommendation /
+        # action prior — it does NOT write to the policy weights (avoids the
+        # optimizer-vs-adaptation "domain clash", audit C5).
+        self.counter_bank = CounterBank()
         self.known_threat_types: set[ThreatType] = set()
         self._adaptation_count = 0
 
@@ -188,11 +195,33 @@ class AdaptationEngine:
         """Update threat knowledge when the swarm destroys a threat.
 
         Feeds the classifier's exchange-ratio / mastery tracking, which in turn
-        drives counter-effectiveness metrics and priority targeting.
+        drives counter-effectiveness metrics and priority targeting, and credits
+        ENGAGE in the counter bank (a neutralization is direct evidence that
+        engaging this threat works).
         """
         for e in engagements:
             if e.outcome == EngagementOutcome.TARGET_DESTROYED and e.threat_type is not None:
                 self.threat_classifier.record_neutralization(e.threat_type)
+                self.counter_bank.record_outcome(e.threat_type, _ENGAGE_INDEX, 1.0)
+
+    def record_outcome(
+        self, threat_type: ThreatType, action_index: int, reward: float
+    ) -> None:
+        """Register that ``action_index`` was taken against ``threat_type`` and
+        produced ``reward`` — one turn of the counter bank's wheel."""
+        self.counter_bank.record_outcome(threat_type, action_index, reward)
+
+    def recommend_counter(self, threat_type: ThreatType) -> tuple[int | None, float]:
+        """Best learned counter-action for a threat and a confidence in [0, 1]."""
+        return self.counter_bank.recommend(threat_type)
+
+    def mastery_of(self, threat_type: ThreatType) -> float:
+        """How confidently the engine has mastered a threat, blending the learned
+        counter bank with the classifier's category-level transfer knowledge."""
+        return max(
+            self.counter_bank.mastery(threat_type),
+            self.threat_classifier.get_related_knowledge(threat_type),
+        )
 
     def _transfer_adaptation_to_model(
         self, model: nn.Module, adapted_head: nn.Module

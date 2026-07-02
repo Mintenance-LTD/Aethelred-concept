@@ -160,6 +160,11 @@ class TrainerConfig:
     update_interval: int = 256  # steps collected before a PPO update
     normalize_rewards: bool = True  # scale rewards by running return std (stability)
     aux_coef: float = 0.0  # weight of the threat-composition auxiliary loss (0 = off)
+    # The env only consumes the discrete action_type (target_index/formation are
+    # currently inert), so by default PPO scores the objective on action_type
+    # alone — including the inert factors just injects importance-ratio and
+    # entropy noise (audit C2). Set True to restore the old 3-factor objective.
+    ppo_include_inert_factors: bool = False
     device: str = "cpu"
 
 
@@ -171,6 +176,11 @@ class LearningLoopConfig:
     enable_prediction: bool = True
     enable_maml: bool = True
     enable_ewc: bool = True
+    # When False, the loop learns (classifier / counter bank / EWC / opponent
+    # model) but does NOT overwrite the live policy weights. PPO training sets
+    # this False so the optimizer is the sole writer of the policy (audit C5);
+    # the standalone learning-loop demo leaves it True to show the weight update.
+    apply_weight_updates: bool = True
 
 
 @dataclass

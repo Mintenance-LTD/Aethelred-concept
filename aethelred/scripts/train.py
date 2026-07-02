@@ -91,6 +91,7 @@ def train(
     noise: bool = True,
     fixed_seed: int | None = None,
     no_adapt: bool = False,
+    simple_domain: bool = False,
 ) -> None:
     """Main training loop.
 
@@ -128,7 +129,11 @@ def train(
         log_dir=f"runs/aethelred_{mode}",
     )
 
-    # Build adaptation engine
+    # Build adaptation engine. During PPO training the optimizer is the sole
+    # writer of the policy weights, so the learning loop must NOT overwrite them
+    # mid-rollout (audit C5) — it still learns the classifier / counter bank / EWC
+    # / opponent model, which PPO and the safety shield consume read-only.
+    config.learning_loop.apply_weight_updates = False
     adaptation_engine = AdaptationEngine(config.adaptation, device=config.device)
     opponent_model = OpponentBehaviorModel(device=config.device)
     learning_loop = LearningLoop(
@@ -139,7 +144,7 @@ def train(
     )
 
     # Safety system
-    safety_config = SafetyConfig()
+    safety_config = SafetyConfig(simple_domain_enabled=simple_domain)
     safety = SafetyManager(
         config=safety_config,
         battlefield_width=config.simulation.battlefield.width,
@@ -187,6 +192,16 @@ def train(
 
         # Create environment for this episode
         env = AethelredEnv(config=config.simulation, render_mode=render_mode)
+
+        # Simple-Domain survival floor: keep units out of the kill range of
+        # threats the engine has not yet mastered (shielded exploration). Uses the
+        # adaptation engine's live mastery estimate; off unless configured.
+        if not no_adapt and safety_config.simple_domain_enabled:
+            env.set_shield(
+                lambda drone, threats: safety.simple_domain.shield(
+                    drone, threats, adaptation_engine.mastery_of
+                )
+            )
 
         # Reset (fixed scenario if requested, else a fresh seed per episode)
         obs, info = env.reset(seed=fixed_seed if fixed_seed is not None else 42 + episode)
@@ -251,12 +266,21 @@ def train(
                 if new_state is not None:
                     learning_loop.on_step(new_state, reward)
                 if new_total > prev_total_losses:
-                    for loss in env.get_losses_since(step - 1):
+                    # Feed only THIS step's losses. Losses created this iteration
+                    # carry timestep == step; get_losses_since(step) selects them
+                    # without re-feeding the previous step's (audit H4).
+                    for loss in env.get_losses_since(step):
                         learning_loop.on_loss(loss)
                 all_eng = env.get_all_engagements()
                 learning_loop.on_engagements(all_eng[prev_engagements:])
                 prev_engagements = len(all_eng)
                 learning_loop.maybe_adapt()
+
+                # Turn the counter bank's wheel: credit the commanded action with
+                # this step's reward against every threat it was chosen against.
+                at_idx = int(gym_action["action_type"])
+                for threat in clean_state.active_threats:
+                    adaptation_engine.record_outcome(threat.threat_type, at_idx, reward)
 
             prev_total_losses = new_total
 
@@ -373,6 +397,9 @@ def main() -> None:
                         help="Fixed scenario seed every episode (for learning sanity checks)")
     parser.add_argument("--no-adapt", action="store_true",
                         help="Disable the online adaptation engine (train pure PPO)")
+    parser.add_argument("--simple-domain", action="store_true",
+                        help="Enable the Simple-Domain survival floor (shielded exploration "
+                             "against threats the engine has not yet mastered)")
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -399,6 +426,7 @@ def main() -> None:
         noise=not args.no_noise,
         fixed_seed=args.seed,
         no_adapt=args.no_adapt,
+        simple_domain=args.simple_domain,
     )
 
 

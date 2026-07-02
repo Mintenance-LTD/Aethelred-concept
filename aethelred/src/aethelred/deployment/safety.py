@@ -16,13 +16,13 @@ import logging
 import time
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
+from typing import Callable, Optional
 
 import numpy as np
 
 from aethelred.core.actions import TacticalAction, TacticalDecision
-from aethelred.core.enums import TacticalActionType
-from aethelred.core.models import BattlefieldState, DroneState, Vec2
+from aethelred.core.enums import TacticalActionType, ThreatType
+from aethelred.core.models import BattlefieldState, DroneState, ThreatState, Vec2
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +66,11 @@ class SafetyConfig:
     velocity_noise_std: float = 0.5  # m/s
     heading_noise_std: float = 0.05  # radians
     sensor_dropout_prob: float = 0.02  # probability of sensor dropout per step
+
+    # Simple Domain (survival floor for unmastered threats)
+    simple_domain_enabled: bool = False
+    simple_domain_mastery_threshold: float = 0.5
+    simple_domain_buffer: float = 1.15  # push units to buffer * kill_range
 
 
 @dataclass
@@ -307,6 +312,66 @@ class HeartbeatMonitor:
         ]
 
 
+class SimpleDomain:
+    """A minimal, hard-coded survival envelope — the tactical analogue of a JJK
+    Simple Domain.
+
+    It does not learn. It just refuses the sure-hit effect of a threat the swarm
+    has not yet mastered: while a threat signature's mastery is below threshold,
+    any unit that drifts inside that threat's estimated kill range is reflexively
+    pushed back out (EVADE), regardless of the commanded action. This is shielded
+    reinforcement learning — the policy may explore freely, but exploration
+    against an unmastered lethal threat can never collect a free kill on our units,
+    which keeps exploration non-suicidal long enough for the learner to adapt.
+
+    :meth:`shield` is a pure function of the drone, the visible threats, and a
+    mastery lookup, so it is trivially testable and has no hidden state.
+    """
+
+    def __init__(self, mastery_threshold: float = 0.5, buffer: float = 1.15) -> None:
+        self.mastery_threshold = mastery_threshold
+        self.buffer = buffer
+
+    def shield(
+        self,
+        drone: DroneState,
+        threats: list[ThreatState],
+        mastery_of: Callable[[ThreatType], float],
+    ) -> Optional[TacticalAction]:
+        """Return an EVADE override if ``drone`` sits inside the kill range of an
+        unmastered threat, else ``None`` (let the commanded action stand).
+
+        When several unmastered threats endanger the unit, it evades the nearest
+        one — the most immediate lethality.
+        """
+        if not drone.is_alive() or not threats:
+            return None
+
+        endangering: Optional[ThreatState] = None
+        nearest = float("inf")
+        for t in threats:
+            if mastery_of(t.threat_type) >= self.mastery_threshold:
+                continue  # mastered -> the policy is trusted to handle it
+            dist = drone.position.distance_to(t.position)
+            if dist <= t.estimated_range and dist < nearest:
+                nearest = dist
+                endangering = t
+
+        if endangering is None:
+            return None
+
+        away = (drone.position - endangering.position).normalized()
+        if away.magnitude() < 1e-6:
+            away = Vec2(x=1.0, y=0.0)  # degenerate overlap -> pick an arbitrary bearing
+        target = drone.position + away.scaled(endangering.estimated_range * self.buffer)
+        return TacticalAction(
+            action_type=TacticalActionType.EVADE,
+            target_unit_id=drone.id,
+            target_position=target,
+            priority=1.0,
+        )
+
+
 class SafetyManager:
     """
     Central safety system that wraps around the tactical AI.
@@ -337,6 +402,10 @@ class SafetyManager:
         self.action_validator = ActionValidator(config)
         self.heartbeat = HeartbeatMonitor(timeout_s=config.heartbeat_timeout_s)
         self.noise_injector = SensorNoiseInjector(config)
+        self.simple_domain = SimpleDomain(
+            mastery_threshold=config.simple_domain_mastery_threshold,
+            buffer=config.simple_domain_buffer,
+        )
 
         self._rtl_active = False
         self._emergency_stop = False

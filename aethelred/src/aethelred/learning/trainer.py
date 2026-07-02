@@ -311,6 +311,18 @@ class PPOTrainer:
         self.config = config
         self.device = torch.device(config.device)
 
+        # Discrete action factors scored by the PPO objective. Only action_type is
+        # consumed by the environment; the inert factors are included only if the
+        # config opts back in (audit C2).
+        self._action_factors: tuple[tuple[str, str], ...] = (
+            ("action_type_logits", "action_type"),
+        )
+        if config.ppo_include_inert_factors:
+            self._action_factors += (
+                ("formation_logits", "formation"),
+                ("target_logits", "target_index"),
+            )
+
         # Value head for advantage estimation
         self.value_head = ValueHead(
             input_dim=policy.config.state_embed_dim
@@ -394,23 +406,21 @@ class PPOTrainer:
 
     # --- Action selection / experience collection -------------------------
 
-    @staticmethod
     def _logp_entropy(
-        logits: dict[str, torch.Tensor], actions: dict[str, torch.Tensor]
+        self, logits: dict[str, torch.Tensor], actions: dict[str, torch.Tensor]
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        """Joint log-prob and entropy over the discrete action factors.
+        """Joint log-prob and entropy over the *consumed* discrete action factors.
 
         Differentiable w.r.t. ``logits`` — this is what makes PPO train the
-        policy network. (Continuous position/priority are treated as
-        deterministic and excluded, as in the original design.)
+        policy network. Factors the environment ignores are excluded so their
+        drift does not add noise to the importance ratio or the entropy bonus
+        (audit C2); ``ppo_include_inert_factors`` restores all three. Continuous
+        position/priority are treated as deterministic and excluded, as in the
+        original design.
         """
         log_prob = torch.zeros(logits["action_type_logits"].shape[0], device=logits["action_type_logits"].device)
         entropy = torch.zeros_like(log_prob)
-        for logit_key, act_key in (
-            ("action_type_logits", "action_type"),
-            ("formation_logits", "formation"),
-            ("target_logits", "target_index"),
-        ):
+        for logit_key, act_key in self._action_factors:
             logp_all = F.log_softmax(logits[logit_key], dim=-1)
             idx = actions[act_key].long().view(-1, 1)
             log_prob = log_prob + logp_all.gather(-1, idx).squeeze(-1)
