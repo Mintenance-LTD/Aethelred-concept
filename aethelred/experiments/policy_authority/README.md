@@ -112,6 +112,52 @@ robust default; the counter bank supplies the explicit per-state values and
 per-state exploration that PPO lacks, and the Simple-Domain shield keeps
 exploration non-suicidal against threats the bank has not yet mastered.
 
+## Follow-up: can we *hand* PPO the signal? (it fights it)
+
+If the collapse were caused by undirected exploration alone, injecting the
+counter bank's recommendation as a per-state action-type **logit prior** — so the
+rollouts are already state-dependent — should let PPO learn the conditional. It
+does not. `prior_guided.py` pre-trains the bank, then trains PPO with the prior
+added to the action-type logits at behaviour time (and re-applied in the update
+so importance sampling stays consistent), and evaluates two policies:
+
+```
+$ python experiments/policy_authority/prior_guided.py experiments/policy_authority/config.yaml 120 6.0
+Counter bank pre-trained:  small_arms -> engage (0.74),  anti_air_missile -> retreat (0.52)
+
+Held-out eval (seeds 9000..9029, prior_scale=6.0):
+  COMBINED (net+prior)   | reward  -0.4  surv 63%  kills 0.0 | winnable->relay  deadly->retreat
+  NET-ALONE (prior off)  | reward -17.5  surv 34%  kills 0.0 | winnable->relay  deadly->relay
+```
+
+The prior pushes `engage` on winnable states with a +4.4 logit, yet the network
+learns a `relay` logit large enough to **override** it: COMBINED picks `relay` on
+winnable (0 kills) and only retreats on deadly *because the prior forces it*.
+Strip the prior (NET-ALONE) and the network is a pure `relay` constant — it
+absorbed none of the guidance. Handing PPO the answer made it *worse* than the
+no-prior baseline (13.5 → −0.4).
+
+**Why:** for PPO to move the network toward `relay` while its rollouts were
+engaging (via the prior), the per-step *advantage* of engaging must have been ≤
+that of relaying — even though engaging wins the episode. On winnable states a
+kill lands on only ~4% of steps (8.9 kills / 200 steps); the other 96% of engage
+steps carry combat risk under a harsh `loss_penalty: 3.0` and no immediate
+reward, so the value baseline makes them look locally bad. This is a **per-step
+credit-assignment** failure, not an information or exploration failure: the
+discriminating variable is in the observation, in the value function (with the
+aux loss), and now in the behaviour policy, and PPO *still* collapses.
+
+That is exactly why the non-parametric counter bank succeeds where every PPO
+variant fails: it estimates the return of each `(threat, action)` pair directly
+from many episode outcomes, bypassing per-step credit assignment entirely.
+
+(Untested, natural next step: "guided exploration" where the prior shapes only
+the behaviour policy and PPO optimises the *bare* network as an off-policy target
+— proper importance weighting `π_net / π_behaviour`. It would face the same
+advantage signal, so the credit-assignment diagnosis predicts it also fails; a
+per-step shaping reward for "engaging an in-range threat" would be the real test
+of the diagnosis.)
+
 ## Reproduce (run from the `aethelred/` directory)
 
 ```bash
@@ -134,6 +180,9 @@ python experiments/policy_authority/diag_value.py experiments/policy_authority/c
 # The counter bank recovers the conditional PPO can't (learns from real outcomes,
 # then matches the oracle on held-out seeds)
 python experiments/policy_authority/counter_bank_demo.py experiments/policy_authority/config.yaml
+
+# Hand PPO the signal as a logit prior — it fights it (COMBINED vs NET-ALONE)
+python experiments/policy_authority/prior_guided.py experiments/policy_authority/config.yaml 120 6.0
 ```
 
 > Note: probe/eval the *latest* `checkpoint_ep*.pt`, not `best_policy.pt` —
