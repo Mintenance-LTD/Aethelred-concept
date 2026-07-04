@@ -57,6 +57,61 @@ tool — it caps at constants. A lighter method with explicit per-state values a
 per-state exploration (e.g. tabular Q-learning / DQN) is expected to learn the
 conditional trivially.
 
+## Re-run after the algorithm-audit fixes
+
+The audit (`../../../ALGORITHM_AUDIT.md`) identified several signal-path defects
+that could have caused or masked the collapse. All were fixed and the experiment
+re-run (pure PPO, `--no-adapt`, 150 episodes; config now uses cross-episode
+batches via `update_interval: 512`, `center_advantages: false`, and a short LR
+warmup):
+
+- **C2** — the PPO objective now scores only `action_type` (the factor the env
+  consumes), not the inert `formation`/`target_index`.
+- **C4** — rollouts accumulate across episodes so a PPO batch mixes the winnable
+  and deadly contexts, and per-batch advantage mean-centering (which deletes the
+  cross-context signal) is disabled.
+- **H2** — GAE now bootstraps time-limit truncations with V(s_{t+1}) instead of
+  forcing the horizon value to zero.
+
+**Result: the collapse does not break — but it improves.** The trained policy is
+still a state-blind constant (the probe shows `retreat` on 30/30 winnable *and*
+deadly states), and on held-out seeds it scores exactly the best constant:
+
+| Agent | Reward | Winnable rew/surv/kills | Deadly rew/surv |
+|---|---|---|---|
+| Oracle | **20.2** | 33.2 / 92% / 8.9 | 7.2 / 79% |
+| **TRAINED (audit-fixed PPO)** | **13.5** | 19.7 / 100% / 0.0 | 7.2 / 79% |
+| constant: always-retreat | 13.5 | 19.7 / 100% / 0.0 | 7.2 / 79% |
+
+So the fixes moved PPO from a *bad* constant (the original runs scored ≤ 1.4) to
+the *best* constant (13.5), but not to a state-dependent policy. This **corroborates
+and strengthens** the original conclusion: the collapse survives fixing the
+signal-path defects — it is a property of undirected-exploration policy
+optimization on this task, not of a broken reward/advantage pipeline.
+
+## The counter bank recovers the conditional PPO can't
+
+The post-audit "divine adaptive engine" (`adaptation/counter_bank.py`) is the
+remedy for exactly this failure: it is non-parametric outcome memory, not a
+policy-gradient learner. Fed the same `(threat, action, reward)` tuples the
+trainer already produces, it recovers the oracle mapping trivially and, followed
+as a policy, **matches the oracle** on held-out seeds:
+
+```
+$ python experiments/policy_authority/counter_bank_demo.py experiments/policy_authority/config.yaml
+Learned counters (from real episode outcomes):
+  small_arms       -> engage   (confidence 0.74, turns 7600)
+  anti_air_missile -> retreat  (confidence 0.52, turns 8400)
+
+Held-out eval (seeds 9000..9029):
+  counter-bank agent | reward  20.2  surv  85%  kills  4.5      # == oracle
+```
+
+This is the intended division of labour: PPO optimizes the neural trunk toward a
+robust default; the counter bank supplies the explicit per-state values and
+per-state exploration that PPO lacks, and the Simple-Domain shield keeps
+exploration non-suicidal against threats the bank has not yet mastered.
+
 ## Reproduce (run from the `aethelred/` directory)
 
 ```bash
@@ -75,4 +130,12 @@ python experiments/policy_authority/probe_actions.py experiments/policy_authorit
 # Does the value function separate the contexts?
 python experiments/policy_authority/diag_value.py experiments/policy_authority/config.yaml \
     checkpoints/policy_authority/best_policy.pt
+
+# The counter bank recovers the conditional PPO can't (learns from real outcomes,
+# then matches the oracle on held-out seeds)
+python experiments/policy_authority/counter_bank_demo.py experiments/policy_authority/config.yaml
 ```
+
+> Note: probe/eval the *latest* `checkpoint_ep*.pt`, not `best_policy.pt` —
+> checkpoint selection is by noisy single-episode reward (audit M3), so
+> `best_policy.pt` is often an early winnable-episode snapshot.

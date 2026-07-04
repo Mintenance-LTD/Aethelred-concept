@@ -30,28 +30,34 @@ class CounterBank:
     """Per-``ThreatType`` running estimate of each action's mean outcome reward."""
 
     num_actions: int = _NUM_ACTIONS
-    min_turns: int = 3            # turns of the wheel before a counter is trusted
-    mastery_margin: float = 0.25  # value gap (best - mean) that earns full confidence
+    min_turns: int = 3          # turns of the wheel before a counter is trusted
+    t_reference: float = 2.5    # t-statistic that earns full confidence (~99%)
     _values: dict[ThreatType, np.ndarray] = field(default_factory=dict)
     _counts: dict[ThreatType, np.ndarray] = field(default_factory=dict)
+    _m2: dict[ThreatType, np.ndarray] = field(default_factory=dict)  # Welford sum of sq. diffs
 
     def _ensure(self, threat_type: ThreatType) -> None:
         if threat_type not in self._values:
             self._values[threat_type] = np.zeros(self.num_actions, dtype=np.float64)
             self._counts[threat_type] = np.zeros(self.num_actions, dtype=np.float64)
+            self._m2[threat_type] = np.zeros(self.num_actions, dtype=np.float64)
 
     def record_outcome(
         self, threat_type: ThreatType, action_index: int, reward: float
     ) -> None:
         """Register one outcome: ``action_index`` was taken against ``threat_type``
-        and yielded ``reward``. Updated as an incremental (Welford) mean, so old
-        turns are never discarded — the wheel only accumulates."""
+        and yielded ``reward``. Mean and variance are tracked with Welford's
+        online algorithm, so old turns are never discarded — the wheel only
+        accumulates, and the variance lets confidence reflect statistical
+        reliability rather than raw reward magnitude."""
         self._ensure(threat_type)
         i = int(action_index) % self.num_actions
         self._counts[threat_type][i] += 1.0
         c = self._counts[threat_type][i]
         v = self._values[threat_type][i]
-        self._values[threat_type][i] = v + (reward - v) / c
+        delta = reward - v
+        self._values[threat_type][i] = v + delta / c
+        self._m2[threat_type][i] += delta * (reward - self._values[threat_type][i])
 
     def turns(self, threat_type: ThreatType) -> int:
         """Total recorded outcomes for a threat (how far the wheel has turned)."""
@@ -87,8 +93,20 @@ class CounterBank:
         others[best] = False
         baseline = float(v[others].max()) if others.any() else 0.0
         margin = float(v[best] - baseline)
-        conf = float(np.clip(margin / self.mastery_margin, 0.0, 1.0))
-        conf *= float(np.clip(c[best] / self.min_turns, 0.0, 1.0))
+        if margin <= 0.0:
+            return best, 0.0
+
+        # Confidence = statistical reliability of the ranking, not the raw margin.
+        # A small but consistent per-step edge becomes certain over many turns, so
+        # score it by a t-statistic (margin / standard error of the best action).
+        n = c[best]
+        var = self._m2[threat_type][best] / max(n - 1.0, 1.0)
+        std_err = (var / n) ** 0.5
+        if std_err < 1e-9:
+            conf = 1.0  # zero-variance winner (e.g. always the same reward)
+        else:
+            conf = float(np.clip((margin / std_err) / self.t_reference, 0.0, 1.0))
+        conf *= float(np.clip(n / self.min_turns, 0.0, 1.0))
         return best, conf
 
     def mastery(self, threat_type: ThreatType) -> float:
