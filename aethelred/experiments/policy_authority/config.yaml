@@ -9,4 +9,6 @@ simulation:
 # update_interval spans >1 episode (200 steps each) so a PPO batch mixes the
 # winnable and deadly contexts, and center_advantages: false keeps the
 # cross-context advantage that per-batch mean-centering would delete (audit C4).
-training: {update_interval: 512, learning_rate: 0.0005, entropy_coef: 0.05, aux_coef: 1.0, center_advantages: false}
+# Short warmup so learning starts early on a CPU-bounded run; total_training_steps
+# sets a gentle cosine decay horizon over ~150 episodes of updates.
+training: {update_interval: 512, learning_rate: 0.0005, entropy_coef: 0.05, aux_coef: 1.0, center_advantages: false, warmup_steps: 40, total_training_steps: 800}
