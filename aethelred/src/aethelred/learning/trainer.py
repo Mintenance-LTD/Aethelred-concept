@@ -46,6 +46,10 @@ class RolloutStep:
     done: bool  # episode boundary (true termination OR time-limit truncation)
     terminated: bool = True  # real terminal state (vs. time-limit truncation)
     bootstrap_value: float = 0.0  # V(s_{t+1}) used to bootstrap a truncated step
+    # Additive action-type logit prior in force when this action was taken (e.g.
+    # a counter-bank recommendation). Part of the behaviour policy, so it must be
+    # re-applied in the update to keep the importance ratio consistent.
+    action_prior: Optional[list[float]] = None
 
 
 @dataclass
@@ -433,12 +437,29 @@ class PPOTrainer:
             entropy = entropy + (-(logp_all.exp() * logp_all).sum(dim=-1))
         return log_prob, entropy
 
+    def _apply_action_prior(
+        self, logits: dict[str, torch.Tensor], prior: Optional[torch.Tensor]
+    ) -> dict[str, torch.Tensor]:
+        """Add an additive prior to the action-type logits (no-op if ``prior`` is
+        None). Returns a shallow-copied dict so the caller's logits are untouched."""
+        if prior is None:
+            return logits
+        out = dict(logits)
+        out["action_type_logits"] = logits["action_type_logits"] + prior
+        return out
+
     @torch.no_grad()
-    def select_action(self, obs_tensors: dict[str, torch.Tensor]) -> dict:
+    def select_action(
+        self, obs_tensors: dict[str, torch.Tensor],
+        action_prior: Optional[np.ndarray] = None,
+    ) -> dict:
         """Pick an action for the current observation and stash the step.
 
-        Call :meth:`finish_step` with the resulting reward to commit it to the
-        rollout buffer.
+        ``action_prior`` (length num_action_types) is added to the action-type
+        logits before sampling — a guided-exploration bias, e.g. the counter
+        bank's recommendation for the current threat. It is stored with the step
+        and re-applied in the PPO update so the behaviour and optimised policies
+        stay consistent. Call :meth:`finish_step` with the reward to commit.
         """
         self.policy.state_encoder.eval()
         self.policy.transformer.eval()
@@ -447,7 +468,11 @@ class PPOTrainer:
         state_embed = self.policy.state_encoder(obs_dev)  # (1, D)
         value = self.value_head(state_embed).item()
 
-        logits = self.policy.forward_step(state_embed)
+        prior_t = None
+        if action_prior is not None:
+            prior_t = torch.as_tensor(action_prior, dtype=torch.float32, device=self.device)
+
+        logits = self._apply_action_prior(self.policy.forward_step(state_embed), prior_t)
         sampled = self.policy.transformer.action_head.sample_action(
             logits, deterministic=False
         )
@@ -463,6 +488,7 @@ class PPOTrainer:
             actions,
             value,
             float(log_prob.item()),
+            None if action_prior is None else [float(x) for x in np.asarray(action_prior).ravel()],
         )
         return self.policy.transformer.action_head.to_gym_action(sampled)
 
@@ -483,7 +509,7 @@ class PPOTrainer:
         """
         if self._pending is None:
             raise RuntimeError("finish_step called without a preceding select_action")
-        obs, actions, value, log_prob = self._pending
+        obs, actions, value, log_prob, action_prior = self._pending
         self.rollout_buffer.steps.append(RolloutStep(
             obs=obs,
             action_taken=actions,
@@ -493,6 +519,7 @@ class PPOTrainer:
             done=done,
             terminated=done if terminated is None else terminated,
             bootstrap_value=bootstrap_value,
+            action_prior=action_prior,
         ))
         self._pending = None
 
@@ -581,8 +608,18 @@ class PPOTrainer:
                 }
                 state_embeds = self.policy.state_encoder(obs_batch)  # (B, D)
 
-                # Fresh logits + values from the live policy
+                # Fresh logits + values from the live policy. Re-apply the same
+                # action-type prior that was in force at behaviour time so the
+                # importance ratio is consistent (the prior is part of the policy).
                 logits = self.policy.forward_step(state_embeds)
+                if any(s.action_prior is not None for s in steps):
+                    k = logits["action_type_logits"].shape[-1]
+                    prior_batch = torch.tensor(
+                        [s.action_prior if s.action_prior is not None else [0.0] * k
+                         for s in steps],
+                        dtype=torch.float32, device=self.device,
+                    )
+                    logits = self._apply_action_prior(logits, prior_batch)
                 actions_batch = {
                     key: torch.cat([s.action_taken[key] for s in steps], dim=0).to(self.device)
                     for key in ("action_type", "formation", "target_index")
