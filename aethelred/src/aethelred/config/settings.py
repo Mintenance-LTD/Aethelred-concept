@@ -77,6 +77,7 @@ class SimulationConfig:
     reward_weights: dict[str, float] = field(
         default_factory=lambda: {
             "mission_progress": 1.0,
+            "mission_complete": 5.0,  # one-off terminal bonus for finishing the mission
             "survival": 0.5,
             "efficiency": 0.3,
             "threat_neutralized": 0.8,
@@ -165,6 +166,12 @@ class TrainerConfig:
     # alone — including the inert factors just injects importance-ratio and
     # entropy noise (audit C2). Set True to restore the old 3-factor objective.
     ppo_include_inert_factors: bool = False
+    # Per-batch advantage mean-centering. Standard PPO practice, but when a batch
+    # is context-homogeneous (e.g. a single-context episode) the cross-context
+    # advantage is a common offset that centering deletes (audit C4). Set False to
+    # keep only std-scaling and preserve that signal; pair with cross-episode
+    # rollouts (update_interval spanning >1 episode) for best effect.
+    center_advantages: bool = True
     device: str = "cpu"
 
 

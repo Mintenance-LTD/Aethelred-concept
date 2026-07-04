@@ -251,8 +251,17 @@ def train(
             done = terminated or truncated
             episode_reward += reward
 
-            # Commit the step (reward now known) to the PPO rollout
-            trainer.finish_step(reward, done)
+            # Commit the step to the PPO rollout. A time-limit truncation is not a
+            # true terminal — bootstrap it with V(s_{t+1}) so the value target is
+            # not biased to zero at the horizon (audit H2).
+            bootstrap = 0.0
+            if truncated and not terminated:
+                bootstrap = trainer.estimate_value(
+                    BattlefieldStateEncoder.obs_to_tensors(obs, trainer.device)
+                )
+            trainer.finish_step(
+                reward, done, terminated=terminated, bootstrap_value=bootstrap
+            )
 
             # Track losses (for logging)
             new_total = info["total_losses"]
@@ -291,11 +300,10 @@ def train(
             if done:
                 break
 
-        # Flush remaining experience at episode end
-        if len(trainer.rollout_buffer) >= 16:
-            trainer.train_on_rollout()
-        else:
-            trainer.rollout_buffer.clear()
+        # Do NOT flush the rollout at episode end: carrying partial experience
+        # across episodes lets a single PPO update span multiple episodes (hence
+        # multiple opposition contexts), instead of every batch being one context
+        # (audit C4). Updates still fire mid-loop once update_interval is reached.
 
         # Episode complete
         episode_adaptations = learning_loop._total_adaptations - episode_adaptations_start
@@ -356,6 +364,12 @@ def train(
             )
 
         env.close()
+
+    # Final PPO update on any experience left over from the last episodes.
+    if len(trainer.rollout_buffer) >= 16:
+        trainer.train_on_rollout()
+    else:
+        trainer.rollout_buffer.clear()
 
     # Final report
     log.info("")

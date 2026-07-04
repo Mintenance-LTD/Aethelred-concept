@@ -43,7 +43,9 @@ class RolloutStep:
     reward: float
     value: float
     log_prob: float
-    done: bool
+    done: bool  # episode boundary (true termination OR time-limit truncation)
+    terminated: bool = True  # real terminal state (vs. time-limit truncation)
+    bootstrap_value: float = 0.0  # V(s_{t+1}) used to bootstrap a truncated step
 
 
 @dataclass
@@ -72,8 +74,12 @@ class RolloutBuffer:
 
         for step in reversed(self.steps):
             if step.done:
-                next_value = 0.0
+                # Cut the advantage recursion at the episode boundary. A true
+                # terminal has no future (bootstrap 0); a time-limit truncation
+                # DOES have a future, so bootstrap it with V(s_{t+1}) instead of
+                # forcing the value target to zero at the horizon (audit H2).
                 gae = 0.0
+                next_value = 0.0 if step.terminated else step.bootstrap_value
 
             delta = step.reward * reward_scale + gamma * next_value - step.value
             gae = delta + gamma * lam * gae
@@ -460,8 +466,21 @@ class PPOTrainer:
         )
         return self.policy.transformer.action_head.to_gym_action(sampled)
 
-    def finish_step(self, reward: float, done: bool) -> None:
-        """Commit the action selected by the last :meth:`select_action` call."""
+    def finish_step(
+        self,
+        reward: float,
+        done: bool,
+        terminated: Optional[bool] = None,
+        bootstrap_value: float = 0.0,
+    ) -> None:
+        """Commit the action selected by the last :meth:`select_action` call.
+
+        ``terminated`` distinguishes a real terminal state from a time-limit
+        truncation; ``bootstrap_value`` is V(s_{t+1}) for a truncated final step
+        (see :meth:`RolloutBuffer.compute_gae`). ``terminated`` defaults to
+        ``done`` to preserve the original "every done is terminal" behaviour for
+        callers that do not distinguish the two.
+        """
         if self._pending is None:
             raise RuntimeError("finish_step called without a preceding select_action")
         obs, actions, value, log_prob = self._pending
@@ -472,8 +491,17 @@ class PPOTrainer:
             value=value,
             log_prob=log_prob,
             done=done,
+            terminated=done if terminated is None else terminated,
+            bootstrap_value=bootstrap_value,
         ))
         self._pending = None
+
+    @torch.no_grad()
+    def estimate_value(self, obs_tensors: dict[str, torch.Tensor]) -> float:
+        """V(s) for a raw observation — used to bootstrap truncated episodes."""
+        self.policy.state_encoder.eval()
+        obs_dev = {k: v.to(self.device) for k, v in obs_tensors.items()}
+        return float(self.value_head(self.policy.state_encoder(obs_dev)).item())
 
     @property
     def ready_to_update(self) -> bool:
@@ -520,9 +548,14 @@ class PPOTrainer:
             dtype=torch.float32, device=self.device,
         )
 
-        # Normalize advantages
+        # Normalize advantages. Mean-centering is optional: with context-
+        # homogeneous batches it removes the cross-context signal, so it can be
+        # disabled to keep only std-scaling (audit C4).
         if advantages_t.std() > 1e-8:
-            advantages_t = (advantages_t - advantages_t.mean()) / (advantages_t.std() + 1e-8)
+            if self.config.center_advantages:
+                advantages_t = (advantages_t - advantages_t.mean()) / (advantages_t.std() + 1e-8)
+            else:
+                advantages_t = advantages_t / (advantages_t.std() + 1e-8)
 
         obs_keys = list(self.rollout_buffer.steps[0].obs.keys())
 

@@ -87,3 +87,51 @@ def test_shield_overrides_command_in_step_path():
 def test_no_shield_leaves_behavior_unchanged():
     # Default (no shield) trajectories are identical to before the shield hook.
     assert _run(11) == _run(11)
+
+
+def test_mission_progress_reward_is_not_aliased_to_zero():
+    """Completing an objective must actually pay out (audit C1 regression)."""
+    import numpy as np
+    from aethelred.simulation.environment import AethelredEnv
+
+    cfg = _small_config()
+    cfg.reward_weights = {
+        "mission_progress": 100.0, "mission_complete": 0.0, "survival": 0.0,
+        "threat_neutralized": 0.0, "loss_penalty": 0.0,
+    }
+    env = AethelredEnv(config=cfg)
+    env.reset(seed=1)
+
+    # Teleport a drone onto an objective so it completes during the step.
+    drone = env.entity_manager.get_active_drones()[0]
+    obj = env._objectives[0]
+    drone.position = obj.position.__class__(x=obj.position.x, y=obj.position.y)
+
+    hold = {"action_type": 7, "target_position": np.array([0.5, 0.5], np.float32),
+            "priority": np.array([0.5], np.float32), "formation": 0, "target_index": 0}
+    _, reward, *_ = env.step(hold)
+    assert env._objectives[0].is_completed
+    assert reward == 100.0, f"mission_progress reward was aliased away: {reward}"
+
+
+def test_mission_complete_bonus_paid_once():
+    import numpy as np
+    from aethelred.simulation.environment import AethelredEnv
+
+    cfg = _small_config()
+    cfg.reward_weights = {
+        "mission_progress": 0.0, "mission_complete": 5.0, "survival": 0.0,
+        "threat_neutralized": 0.0, "loss_penalty": 0.0,
+    }
+    env = AethelredEnv(config=cfg)
+    env.reset(seed=1)
+    reward = 0.0
+    for obj in env._objectives:
+        drone = env.entity_manager.get_active_drones()[0]
+        drone.position = obj.position.__class__(x=obj.position.x, y=obj.position.y)
+        hold = {"action_type": 7, "target_position": np.array([0.5, 0.5], np.float32),
+                "priority": np.array([0.5], np.float32), "formation": 0, "target_index": 0}
+        _, reward, term, trunc, _ = env.step(hold)
+        if term or trunc:
+            break
+    assert reward == 5.0, f"expected one-off mission_complete bonus, got {reward}"

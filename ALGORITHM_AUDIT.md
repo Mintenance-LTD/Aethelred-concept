@@ -249,6 +249,41 @@ coherent end-to-end; and the experiment harness's methodology (held-out seeds,
 constant/random/oracle baselines, probe + value diagnostics) is good practice.
 All 21 tests pass.
 
+## Remediation status (addressed on this branch)
+
+The following findings have been fixed in follow-up commits; see the module
+docstrings and `tests/` for details.
+
+- **C1 — mission reward aliasing:** `step()` now captures objective-completion
+  counts *before* mutation and passes the delta into `_compute_reward`, plus a
+  one-off `mission_complete` terminal bonus. Regression tests
+  `test_mission_progress_reward_is_not_aliased_to_zero` /
+  `test_mission_complete_bonus_paid_once`.
+- **C2 — inert PPO factors:** the PPO objective scores only `action_type` by
+  default (`ppo_include_inert_factors` restores the old 3-factor objective).
+- **C4 — single-context batches + advantage centering:** the training loop no
+  longer flushes the rollout at every episode end, so a PPO update can span
+  multiple episodes/contexts; `center_advantages=False` keeps the cross-context
+  advantage that per-batch mean-centering deletes. The experiment config uses
+  `update_interval=512` + `center_advantages=false`.
+- **C5 — adaptation/optimizer domain clash:** the learning loop no longer
+  overwrites live policy weights during PPO (`apply_weight_updates=False`); the
+  counter bank / classifier / EWC / opponent model still learn, consumed
+  read-only.
+- **H2 — truncation treated as termination:** GAE now bootstraps time-limit
+  truncations with V(s_{t+1}) instead of forcing the horizon value to zero
+  (`RolloutStep.terminated` / `bootstrap_value`; `test_gae_bootstraps_truncation…`).
+- **H4 — double-fed losses:** online adaptation now sees each loss event once.
+
+Added capability (the "divine adaptive engine"): `CounterBank` (outcome-driven,
+never-forgetting per-threat counter memory) and `SimpleDomain` (a survival-floor
+reflex that shields units from unmastered threats).
+
+Still open (documented, not yet fixed): **H1** (position/priority heads remain
+untrainable — would need a stochastic position head in the PPO objective), **H3**
+(train/eval `time_scale` parity), **H5** (curriculum stage budgets), and the
+medium/minor items **M1–M8**.
+
 ## Recommended order of attack
 
 1. Fix the reward: C1 (snapshot states, completion bonus) — this changes the

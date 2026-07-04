@@ -188,7 +188,11 @@ class AethelredEnv(gym.Env):
             self._step_count, self.entity_manager, self.battlefield
         )
 
-        # Update objective completion
+        # Update objective completion. Capture the completed count BEFORE mutating
+        # the objectives: state_before aliases these same objects (pydantic does
+        # not deep-copy nested models), so comparing state_before/state_after
+        # objectives after mutation always reads zero new completions (audit C1).
+        completed_before = sum(1 for o in self._objectives if o.is_completed)
         for obj in self._objectives:
             if obj.is_completed:
                 continue
@@ -196,13 +200,21 @@ class AethelredEnv(gym.Env):
                 if drone.position.distance_to(obj.position) < 30.0:
                     obj.is_completed = True
                     break
+        completed_after = sum(1 for o in self._objectives if o.is_completed)
+        new_completions = completed_after - completed_before
+        mission_complete = bool(self._objectives) and completed_after == len(self._objectives)
 
         # Build new state
         self._step_count += 1
         self._current_state = self._build_state()
 
-        # Compute reward
-        reward = self._compute_reward(state_before, self._current_state, losses, engagements)
+        # Compute reward (objective delta passed explicitly, not re-derived from
+        # the aliased before/after snapshots)
+        reward = self._compute_reward(
+            state_before, self._current_state, losses, engagements,
+            new_completions=new_completions,
+            mission_just_completed=mission_complete and new_completions > 0,
+        )
         self._total_reward += reward
 
         # Termination
@@ -426,8 +438,16 @@ class AethelredEnv(gym.Env):
         state_after: BattlefieldState,
         losses: list[LossEvent],
         engagements: Optional[list] = None,
+        new_completions: int = 0,
+        mission_just_completed: bool = False,
     ) -> float:
-        """Compute composite reward."""
+        """Compute composite reward.
+
+        ``new_completions`` and ``mission_just_completed`` are supplied by
+        :meth:`step` from counts captured *before* the objectives were mutated —
+        deriving them here from ``state_before``/``state_after`` would always read
+        zero because both snapshots alias the same objective objects (audit C1).
+        """
         w = self.config.reward_weights
         reward = 0.0
 
@@ -450,11 +470,12 @@ class AethelredEnv(gym.Env):
             threats_killed = max(0, len(state_before.active_threats) - len(state_after.active_threats))
         reward += w.get("threat_neutralized", 0.8) * threats_killed * 0.5
 
-        # Mission progress
-        completed_before = sum(1 for o in state_before.objectives if o.is_completed)
-        completed_after = sum(1 for o in state_after.objectives if o.is_completed)
-        new_completions = completed_after - completed_before
+        # Mission progress (per-objective) + a one-off terminal bonus for finishing
+        # the mission, which must outweigh the survival reward stream the episode
+        # forfeits by terminating on completion.
         reward += w.get("mission_progress", 1.0) * new_completions
+        if mission_just_completed:
+            reward += w.get("mission_complete", 5.0)
 
         return reward
 

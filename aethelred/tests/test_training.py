@@ -139,3 +139,42 @@ def test_select_and_finish_collects_a_step(tmp_path):
     assert "action_type" in gym_action
     trainer.finish_step(reward=1.0, done=False)
     assert len(trainer.rollout_buffer) == 1
+
+
+def test_gae_bootstraps_truncation_but_not_termination():
+    """A time-limit truncation must bootstrap V(s_{t+1}); a true terminal must
+    not (audit H2)."""
+    from aethelred.learning.trainer import RolloutBuffer
+
+    def _one(terminated: bool, boot: float) -> float:
+        buf = RolloutBuffer()
+        buf.steps = [RolloutStep(
+            obs={}, action_taken={}, reward=1.0, value=0.0, log_prob=0.0,
+            done=True, terminated=terminated, bootstrap_value=boot,
+        )]
+        _, returns = buf.compute_gae(gamma=0.99, lam=0.95)
+        return returns[0]
+
+    terminal_return = _one(terminated=True, boot=10.0)   # boot ignored
+    truncated_return = _one(terminated=False, boot=10.0)  # boot used
+    assert abs(terminal_return - 1.0) < 1e-6
+    assert abs(truncated_return - (1.0 + 0.99 * 10.0)) < 1e-6
+
+
+def test_center_advantages_flag_runs_both_ways(tmp_path):
+    for center in (True, False):
+        cfg = TrainerConfig(
+            warmup_steps=0, total_training_steps=1000, learning_rate=1e-2,
+            batch_size=16, ppo_epochs=1, center_advantages=center,
+        )
+        policy = TacticalPolicy.build()
+        trainer = PPOTrainer(policy, cfg, checkpoint_dir=str(tmp_path / f"c{center}"),
+                             log_dir=str(tmp_path / f"r{center}"))
+        before = {n: p.clone() for n, p in policy.transformer.named_parameters()}
+        trainer.rollout_buffer.steps = [_step(done=(i % 8 == 7)) for i in range(32)]
+        out = trainer.train_on_rollout()
+        assert "policy_loss" in out
+        changed = any(
+            not torch.equal(p, before[n]) for n, p in policy.transformer.named_parameters()
+        )
+        assert changed, f"no update with center_advantages={center}"

@@ -6,4 +6,7 @@ simulation:
   threats: {initial_threats: 5, max_threats: 8, spawn_interval: 40, default_profile: random_mix}
   swarm: {autonomy_enabled: false}        # policy is the sole driver
   reward_weights: {survival: 0.1, threat_neutralized: 4.0, loss_penalty: 3.0, mission_progress: 0.0, efficiency: 0.0, adaptation_bonus: 0.0}
-training: {update_interval: 64, learning_rate: 0.0005, entropy_coef: 0.05, aux_coef: 1.0}
+# update_interval spans >1 episode (200 steps each) so a PPO batch mixes the
+# winnable and deadly contexts, and center_advantages: false keeps the
+# cross-context advantage that per-batch mean-centering would delete (audit C4).
+training: {update_interval: 512, learning_rate: 0.0005, entropy_coef: 0.05, aux_coef: 1.0, center_advantages: false}
