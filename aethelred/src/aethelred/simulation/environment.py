@@ -470,6 +470,20 @@ class AethelredEnv(gym.Env):
             threats_killed = max(0, len(state_before.active_threats) - len(state_after.active_threats))
         reward += w.get("threat_neutralized", 0.8) * threats_killed * 0.5
 
+        # Dense shaping: credit incremental DAMAGE dealt to threats this step, not
+        # only completed kills. Kills land on ~4% of engage steps, so the raw kill
+        # signal is too sparse for per-step advantage to value engaging; rewarding
+        # damage-toward-a-kill densifies it. This does NOT encode which threat to
+        # engage — engaging a threat that outranges you still nets negative once
+        # the loss penalty lands, so the state-dependence must still be learned.
+        # Off by default (weight 0.0).
+        dmg_w = w.get("threat_damage", 0.0)
+        if dmg_w and engagements is not None:
+            threat_damage = sum(
+                max(0.0, e.threat_health_before - e.threat_health_after) for e in engagements
+            )
+            reward += dmg_w * threat_damage
+
         # Mission progress (per-objective) + a one-off terminal bonus for finishing
         # the mission, which must outweigh the survival reward stream the episode
         # forfeits by terminating on completion.
