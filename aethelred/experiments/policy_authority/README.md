@@ -145,18 +145,61 @@ steps carry combat risk under a harsh `loss_penalty: 3.0` and no immediate
 reward, so the value baseline makes them look locally bad. This is a **per-step
 credit-assignment** failure, not an information or exploration failure: the
 discriminating variable is in the observation, in the value function (with the
-aux loss), and now in the behaviour policy, and PPO *still* collapses.
+aux loss), and now in the behaviour policy, and PPO *still* collapses. *(This
+credit-assignment reading is revised by the shaping test below, which shows a
+dense reward does not help — the cause is the constant-vs-conditional collapse
+itself.)*
 
 That is exactly why the non-parametric counter bank succeeds where every PPO
 variant fails: it estimates the return of each `(threat, action)` pair directly
-from many episode outcomes, bypassing per-step credit assignment entirely.
+from many episode outcomes.
 
-(Untested, natural next step: "guided exploration" where the prior shapes only
-the behaviour policy and PPO optimises the *bare* network as an off-policy target
-— proper importance weighting `π_net / π_behaviour`. It would face the same
-advantage signal, so the credit-assignment diagnosis predicts it also fails; a
-per-step shaping reward for "engaging an in-range threat" would be the real test
-of the diagnosis.)
+## The shaping test: credit assignment was NOT the (whole) story
+
+The prior-guided section proposed per-step credit assignment as the cause and a
+dense shaping reward as the test. `config_shaped.yaml` adds `threat_damage: 3.0`
+— a per-step reward for damage dealt to threats, which densifies the sparse kill
+signal (kills land on ~4% of engage steps → damage lands on most of them). It
+does **not** encode the answer: baselines under this reward confirm the premise
+holds (constant-engage on deadly still scores −27, oracle 28.3 ≫ best constant):
+
+```
+$ python experiments/policy_authority/eval_agents.py experiments/policy_authority/config_shaped.yaml 9000 20
+constant:engage | reward  8.0 | WIN 60.9/93%/9.0 | DEAD -27.3/14%
+constant:retreat| reward 12.0 | WIN 20.0/100%/0  | DEAD   6.6/78%
+oracle          | reward 28.3 | WIN 60.9/93%/9.0 | DEAD   6.6/78%
+```
+
+Re-running pure PPO with this dense reward — **the collapse still does not
+break.** The probe shows `retreat` on 30/30 winnable *and* deadly states, and:
+
+```
+TRAINED (dense-shaped PPO) | reward 12.0 | WIN 20.0/100%/0 | DEAD 6.6/78%   == always-retreat
+```
+
+So densifying the signal did **not** rescue PPO — it converges to the same
+state-blind `retreat` constant. **This refutes credit assignment as the primary
+cause.** The real mechanism is simpler and unifies every run here: a single
+state-blind-ish policy, optimized by policy gradient, converges to the best
+*constant* action — and `retreat` (safe in both contexts, 12.0) beats `engage`
+(8.0, dragged down by deadly losses) *as a constant*. Making winnable-engagement
+more lucrative does not change which constant wins, because always-engage is
+still worse overall. To beat the best constant the policy must *condition* on the
+threat, and that is precisely the step every PPO variant here fails to take —
+whether the discriminating variable is in the observation, the value function
+(aux loss), the reward density, or the behaviour policy (prior).
+
+**The through-line:** PPO marginalizes over the two contexts inside one policy and
+lands on the best constant. The counter bank never marginalizes — it keeps a
+*separate* value per `(threat, action)` by construction — so the conditional is
+trivial for it (oracle-level) and impossible for PPO here. The lesson from the
+whole investigation: on this task the bottleneck is the policy's failure to
+*represent and act on* the context split, not information, exploration, or
+credit-assignment density.
+
+*(An earlier draft of this file diagnosed the prior-guided result as per-step
+credit assignment; the shaping experiment above corrected that — the dense reward
+did not help, so the cause is the constant-vs-conditional collapse itself.)*
 
 ## Reproduce (run from the `aethelred/` directory)
 
@@ -183,6 +226,12 @@ python experiments/policy_authority/counter_bank_demo.py experiments/policy_auth
 
 # Hand PPO the signal as a logit prior — it fights it (COMBINED vs NET-ALONE)
 python experiments/policy_authority/prior_guided.py experiments/policy_authority/config.yaml 120 6.0
+
+# Dense shaping reward — still collapses to always-retreat (train, then probe/eval)
+python scripts/train.py --config experiments/policy_authority/config_shaped.yaml \
+    --episodes 150 --no-noise --no-adapt
+python experiments/policy_authority/probe_actions.py experiments/policy_authority/config_shaped.yaml \
+    $(ls -t checkpoints/policy_authority_shaped/checkpoint_ep*.pt | head -1)
 ```
 
 > Note: probe/eval the *latest* `checkpoint_ep*.pt`, not `best_policy.pt` —
