@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from uuid import UUID
 
 import torch
-import torch.nn as nn
+from torch import nn
 
 from aethelred.core.events import LossEvent
 from aethelred.core.models import Vec2
@@ -86,7 +86,7 @@ class OpponentBehaviorModel:
         sequences = []
         targets = []
 
-        for tid, history in self.movement_histories.items():
+        for history in self.movement_histories.values():
             if len(history) < 10:
                 continue
             for i in range(len(history) - 9):

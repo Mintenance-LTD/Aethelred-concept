@@ -2,18 +2,17 @@
 
 from __future__ import annotations
 
-from typing import Optional
 from uuid import UUID
 
 import numpy as np
 
 from aethelred.config.settings import SimulationConfig
+from aethelred.core.actions import TacticalDecision
 from aethelred.core.enums import (
     DroneRole,
     EngagementOutcome,
     TacticalActionType,
 )
-from aethelred.core.actions import TacticalDecision
 from aethelred.core.events import EngagementEvent, LossEvent
 from aethelred.core.models import DroneState, ThreatState, Vec2
 from aethelred.simulation.battlefield import Battlefield
@@ -30,7 +29,7 @@ class EntityManager:
         self._loss_events: list[LossEvent] = []
         self._engagement_events: list[EngagementEvent] = []
 
-    def reset(self, scenario: Optional[dict] = None, rng: Optional[np.random.Generator] = None) -> None:
+    def reset(self, scenario: dict | None = None, rng: np.random.Generator | None = None) -> None:
         """Reset all entities. Spawn fresh swarm and threats."""
         self.drones.clear()
         self.threats.clear()
@@ -105,10 +104,7 @@ class EntityManager:
             if drone is None or not drone.is_alive():
                 continue
 
-            if action.action_type in (TacticalActionType.MOVE, TacticalActionType.RECON):
-                if action.target_position is not None:
-                    physics.move_drone(drone, action.target_position, battlefield)
-            elif action.action_type == TacticalActionType.EVADE:
+            if action.action_type in (TacticalActionType.MOVE, TacticalActionType.RECON) or action.action_type == TacticalActionType.EVADE:
                 if action.target_position is not None:
                     physics.move_drone(drone, action.target_position, battlefield)
             elif action.action_type == TacticalActionType.RETREAT:
@@ -150,7 +146,7 @@ class EntityManager:
             if drone.ammo <= 0.0:
                 continue
 
-            damage, destroyed = physics.resolve_attack(
+            damage, _destroyed = physics.resolve_attack(
                 drone.position, threat.position, drone.sensor_range,
                 threat.velocity, battlefield,
             )
@@ -182,7 +178,7 @@ class EntityManager:
         # Threats fire on drones
         for threat in self.get_active_threats():
             # Find closest active drone in range
-            closest_drone: Optional[DroneState] = None
+            closest_drone: DroneState | None = None
             closest_dist = float("inf")
             for drone in self.get_active_drones():
                 dist = drone.position.distance_to(threat.position)
@@ -193,7 +189,7 @@ class EntityManager:
             if closest_drone is None:
                 continue
 
-            damage, destroyed = physics.resolve_attack(
+            damage, _destroyed = physics.resolve_attack(
                 threat.position, closest_drone.position, threat.estimated_range,
                 closest_drone.velocity, battlefield,
             )

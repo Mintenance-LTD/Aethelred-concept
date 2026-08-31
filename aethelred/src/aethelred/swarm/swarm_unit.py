@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import random
-from typing import Optional
 
 import torch
-import torch.nn as nn
+from torch import nn
 
 from aethelred.core.actions import TacticalAction
 from aethelred.core.enums import DroneRole, TacticalActionType
@@ -40,7 +39,7 @@ class SwarmUnit(SwarmUnitInterface):
     def __init__(self, drone_state: DroneState) -> None:
         self.state = drone_state
         self.local_policy = LightweightPolicy()
-        self.last_command: Optional[dict] = None
+        self.last_command: dict | None = None
         self.comm_status: str = "connected"  # connected, degraded, lost
         self.autonomy_level: float = 0.0  # 0=commanded, 1=autonomous
 

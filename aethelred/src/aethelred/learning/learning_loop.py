@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 from aethelred.adaptation.adaptation_engine import AdaptationEngine
 from aethelred.adaptation.opponent_model import OpponentBehaviorModel, PredictedThreatAction
 from aethelred.config.settings import LearningLoopConfig
 from aethelred.core.events import AdaptationEvent, EngagementEvent, LossEvent
 from aethelred.core.models import BattlefieldState
-from aethelred.learning.loss_analyzer import LossAnalyzer, LossAnalysis
+from aethelred.learning.loss_analyzer import LossAnalysis, LossAnalyzer
 from aethelred.tactical_ai.policy import TacticalPolicy
 
 logger = logging.getLogger(__name__)
@@ -33,7 +32,7 @@ class LearningLoop:
         tactical_policy: TacticalPolicy,
         adaptation_engine: AdaptationEngine,
         config: LearningLoopConfig,
-        opponent_model: Optional[OpponentBehaviorModel] = None,
+        opponent_model: OpponentBehaviorModel | None = None,
     ) -> None:
         self.tactical_policy = tactical_policy
         self.adaptation_engine = adaptation_engine
@@ -82,7 +81,7 @@ class LearningLoop:
 
     # --- Phases 2-5: Adaptation Cycle ---
 
-    def maybe_adapt(self) -> Optional[AdaptationEvent]:
+    def maybe_adapt(self) -> AdaptationEvent | None:
         """
         Check if adaptation should trigger, then run Phases 2-5.
         Triggers when:
@@ -194,10 +193,7 @@ class LearningLoop:
             return True
 
         # Periodic interval
-        if self._steps_since_adaptation >= self.config.adaptation_interval:
-            return True
-
-        return False
+        return self._steps_since_adaptation >= self.config.adaptation_interval
 
     @property
     def stats(self) -> dict:

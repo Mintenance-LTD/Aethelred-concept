@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
+from torch import nn
 
 from aethelred.swarm.policy_distiller import PolicyDistiller
 from aethelred.swarm.swarm_unit import LightweightPolicy

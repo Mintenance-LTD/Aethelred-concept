@@ -27,6 +27,7 @@ data/
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
+.coverage
 
 # OS
 .DS_Store

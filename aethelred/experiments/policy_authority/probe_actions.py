@@ -10,12 +10,12 @@ from collections import Counter
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
-import torch  # noqa: E402
+import torch
 
-from aethelred.config.settings import AethelredConfig  # noqa: E402
-from aethelred.simulation.environment import AethelredEnv  # noqa: E402
-from aethelred.tactical_ai.policy import TacticalPolicy  # noqa: E402
-from aethelred.utils.seeding import set_seed  # noqa: E402
+from aethelred.config.settings import AethelredConfig
+from aethelred.simulation.environment import AethelredEnv
+from aethelred.tactical_ai.policy import TacticalPolicy
+from aethelred.utils.seeding import set_seed
 
 ACTION = ["move", "engage", "evade", "formation_change", "recon", "relay", "retreat", "hold"]
 

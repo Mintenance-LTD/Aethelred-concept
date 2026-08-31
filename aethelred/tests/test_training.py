@@ -11,7 +11,7 @@ from __future__ import annotations
 import torch
 
 from aethelred.config.settings import TrainerConfig
-from aethelred.learning.trainer import PPOTrainer, RolloutStep
+from aethelred.learning.trainer import PPOTrainer, RolloutBuffer, RolloutStep
 from aethelred.tactical_ai.policy import TacticalPolicy
 
 
@@ -27,7 +27,7 @@ def _obs() -> dict[str, torch.Tensor]:
     }
 
 
-def _step(done: bool = False) -> RolloutStep:
+def _step(terminated: bool = False) -> RolloutStep:
     return RolloutStep(
         obs={k: v.clone() for k, v in _obs().items()},
         action_taken={
@@ -38,7 +38,7 @@ def _step(done: bool = False) -> RolloutStep:
         reward=0.5,
         value=0.0,
         log_prob=-2.0,
-        done=done,
+        terminated=terminated,
     )
 
 
@@ -67,7 +67,7 @@ def test_ppo_update_trains_the_policy(tmp_path):
     tf_before = {n: p.clone() for n, p in policy.transformer.named_parameters()}
     vh_before = {n: p.clone() for n, p in trainer.value_head.named_parameters()}
 
-    trainer.rollout_buffer.steps = [_step(done=(i % 8 == 7)) for i in range(32)]
+    trainer.rollout_buffer.steps = [_step(terminated=(i % 8 == 7)) for i in range(32)]
     trainer.train_on_rollout()
 
     enc_changed = sum(
@@ -137,5 +137,20 @@ def test_select_and_finish_collects_a_step(tmp_path):
     trainer = PPOTrainer(policy, cfg, checkpoint_dir=str(tmp_path / "c"), log_dir=str(tmp_path / "r"))
     gym_action = trainer.select_action({k: v for k, v in _obs().items()})
     assert "action_type" in gym_action
-    trainer.finish_step(reward=1.0, done=False)
+    trainer.finish_step(reward=1.0, terminated=False, truncated=False)
     assert len(trainer.rollout_buffer) == 1
+
+
+def test_truncation_bootstraps_but_termination_does_not():
+    buffer = RolloutBuffer(steps=[
+        RolloutStep(obs={}, action_taken={}, reward=1.0, value=0.5, log_prob=0.0, terminated=True),
+        RolloutStep(
+            obs={}, action_taken={}, reward=1.0, value=0.5, log_prob=0.0,
+            truncated=True, bootstrap_value=2.0,
+        ),
+    ])
+
+    advantages, _ = buffer.compute_gae(gamma=0.9, lam=0.95)
+
+    assert advantages[0] == 0.5
+    assert advantages[1] == 2.3

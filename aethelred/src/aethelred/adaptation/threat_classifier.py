@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass
 
-from aethelred.core.enums import ThreatCategory, ThreatType, THREAT_TYPE_TO_CATEGORY
+from aethelred.core.enums import THREAT_TYPE_TO_CATEGORY, ThreatCategory, ThreatType
 from aethelred.core.events import LossEvent
 
 

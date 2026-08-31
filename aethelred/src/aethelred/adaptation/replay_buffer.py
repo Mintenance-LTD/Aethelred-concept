@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 
 import numpy as np
 
@@ -20,8 +19,8 @@ class Experience:
     reward: float
     next_state_features: np.ndarray
     done: bool
-    loss_event: Optional[LossEvent] = None
-    threat_type: Optional[ThreatType] = None
+    loss_event: LossEvent | None = None
+    threat_type: ThreatType | None = None
     timestep: int = 0
 
 
@@ -39,7 +38,7 @@ class PrioritizedReplayBuffer:
     def __len__(self) -> int:
         return len(self._buffer)
 
-    def add(self, experience: Experience, priority: Optional[float] = None) -> None:
+    def add(self, experience: Experience, priority: float | None = None) -> None:
         """Add an experience with optional priority."""
         if priority is None:
             # Loss events get a fixed 2x emphasis over the running max. This must

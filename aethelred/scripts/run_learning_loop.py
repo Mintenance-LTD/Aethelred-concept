@@ -112,7 +112,7 @@ def main() -> None:
         )
 
         # Reset environment and policy history
-        obs, info = env.reset(seed=args.seed + episode)
+        _obs, info = env.reset(seed=args.seed + episode)
         policy.reset_history()
 
         # Register swarm units from environment
@@ -162,7 +162,7 @@ def main() -> None:
                     p.predicted_position for p in learning_loop.get_predictions(state)
                 ])
 
-            obs, reward, terminated, truncated, info = env.step(gym_action)
+            _obs, reward, terminated, truncated, info = env.step(gym_action)
             episode_reward += reward
 
             # Check for new losses and forward to mother

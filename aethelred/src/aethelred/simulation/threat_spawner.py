@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import random
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 import numpy as np
 
 from aethelred.config.settings import ThreatSpawnerConfig
-from aethelred.core.enums import ThreatType, THREAT_TYPE_TO_CATEGORY
+from aethelred.core.enums import THREAT_TYPE_TO_CATEGORY, ThreatType
 from aethelred.core.models import ThreatState, Vec2
 from aethelred.simulation.battlefield import Battlefield
 from aethelred.simulation.entity_manager import EntityManager
@@ -112,11 +112,11 @@ class ThreatSpawner:
         self.active_profile = TACTIC_PROFILES.get(
             config.default_profile, TACTIC_PROFILES["patrol"]
         )
-        self._rng: Optional[np.random.Generator] = None
+        self._rng: np.random.Generator | None = None
         self._patrol_waypoints: dict[str, list[Vec2]] = {}  # threat_id -> waypoints
         self._patrol_indices: dict[str, int] = {}
 
-    def reset(self, rng: Optional[np.random.Generator] = None) -> None:
+    def reset(self, rng: np.random.Generator | None = None) -> None:
         self._rng = rng or np.random.default_rng()
         self._patrol_waypoints.clear()
         self._patrol_indices.clear()
@@ -156,7 +156,7 @@ class ThreatSpawner:
         self,
         entity_manager: EntityManager,
         battlefield: Battlefield,
-        physics: "SimplePhysics",
+        physics: SimplePhysics,
     ) -> None:
         """Move threats according to their tactic profile."""
         active_drones = entity_manager.get_active_drones()
@@ -197,19 +197,18 @@ class ThreatSpawner:
                         self.active_profile.speed, battlefield,
                     )
 
-            elif self.active_profile.behavior == "ambush":
+            elif self.active_profile.behavior == "ambush" and active_drones:
                 # Stay hidden until drone is close, then attack
-                if active_drones:
-                    closest = min(
-                        active_drones,
-                        key=lambda d: d.position.distance_to(threat.position),
+                closest = min(
+                    active_drones,
+                    key=lambda d: d.position.distance_to(threat.position),
+                )
+                dist = closest.position.distance_to(threat.position)
+                if dist < self.active_profile.engagement_range:
+                    physics.move_threat(
+                        threat, closest.position,
+                        self.active_profile.speed * 1.5, battlefield,
                     )
-                    dist = closest.position.distance_to(threat.position)
-                    if dist < self.active_profile.engagement_range:
-                        physics.move_threat(
-                            threat, closest.position,
-                            self.active_profile.speed * 1.5, battlefield,
-                        )
 
     def set_profile(self, profile_name: str) -> None:
         """Switch the active tactic profile."""

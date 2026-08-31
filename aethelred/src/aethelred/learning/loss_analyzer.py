@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass
 
-from aethelred.core.enums import ThreatCategory, ThreatType, THREAT_TYPE_TO_CATEGORY
+from aethelred.core.enums import THREAT_TYPE_TO_CATEGORY, ThreatCategory, ThreatType
 from aethelred.core.events import LossEvent
 from aethelred.core.models import Vec2
 from aethelred.utils.geometry import compute_centroid
@@ -52,11 +52,11 @@ class LossAnalyzer:
             )
 
         # 1. Identify threat types involved
-        threat_types = list(set(loss.cause_of_loss for loss in losses))
-        threat_categories = list(set(
+        threat_types = list({loss.cause_of_loss for loss in losses})
+        threat_categories = list({
             THREAT_TYPE_TO_CATEGORY.get(tt, ThreatCategory.KINETIC)
             for tt in threat_types
-        ))
+        })
 
         # 2. Find kill zones (cluster loss positions)
         loss_positions = [

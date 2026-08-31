@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Iterator
+from collections.abc import Iterator
 
 import torch
-import torch.nn as nn
+from torch import nn
 
 from aethelred.config.settings import EWCConfig
 
@@ -121,7 +121,7 @@ class EWCRegularizer:
             count += 1
 
         # Average
-        for name in fisher:
-            fisher[name] = fisher[name] / max(count, 1)
+        for name, value in fisher.items():
+            fisher[name] = value / max(count, 1)
 
         return fisher

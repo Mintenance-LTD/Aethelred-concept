@@ -16,7 +16,7 @@ import logging
 import time
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
+from typing import Any, Protocol
 
 import numpy as np
 
@@ -76,6 +76,28 @@ class SafetyEvent:
     system: str
     message: str
     action_taken: str
+
+
+@dataclass(frozen=True)
+class AuthorisedDecision:
+    """A decision that has passed through the safety supervisor.
+
+    Simulation and future vehicle adapters must accept this wrapper rather than
+    a raw policy proposal. Keeping the authorisation result separate from the
+    proposal makes the execution boundary explicit and auditable.
+    """
+
+    decision: TacticalDecision
+    safety_level: SafetyLevel
+
+
+StepResult = tuple[Any, float, bool, bool, dict[str, Any]]
+
+
+class AuthorisedDecisionExecutor(Protocol):
+    """Minimal execution contract for the safety gateway."""
+
+    def step_decision(self, decision: TacticalDecision) -> StepResult: ...
 
 
 class GeofenceGuard:
@@ -138,7 +160,7 @@ class WatchdogTimer:
     def __init__(self, timeout_ms: float = 200.0, max_failures: int = 3) -> None:
         self.timeout_ms = timeout_ms
         self.max_failures = max_failures
-        self._start_time: Optional[float] = None
+        self._start_time: float | None = None
         self._consecutive_failures = 0
         self._total_timeouts = 0
 
@@ -210,16 +232,20 @@ class ActionValidator:
                 warnings.append(f"Target too far ({dist:.0f}m), clamped to {max_range:.0f}m")
 
         # Check fuel for non-RTL actions
-        if drone_state.fuel < self.config.rtl_fuel_threshold:
-            if action.action_type not in (TacticalActionType.RETREAT, TacticalActionType.HOLD):
-                action.action_type = TacticalActionType.RETREAT
-                warnings.append(f"Low fuel ({drone_state.fuel:.2f}), forced RETREAT")
+        if (
+            drone_state.fuel < self.config.rtl_fuel_threshold
+            and action.action_type not in (TacticalActionType.RETREAT, TacticalActionType.HOLD)
+        ):
+            action.action_type = TacticalActionType.RETREAT
+            warnings.append(f"Low fuel ({drone_state.fuel:.2f}), forced RETREAT")
 
         # Check health for non-evasive actions
-        if drone_state.health < self.config.rtl_health_threshold:
-            if action.action_type == TacticalActionType.ENGAGE:
-                action.action_type = TacticalActionType.EVADE
-                warnings.append(f"Low health ({drone_state.health:.2f}), forced EVADE")
+        if (
+            drone_state.health < self.config.rtl_health_threshold
+            and action.action_type == TacticalActionType.ENGAGE
+        ):
+            action.action_type = TacticalActionType.EVADE
+            warnings.append(f"Low health ({drone_state.health:.2f}), forced EVADE")
 
         return action, warnings
 
@@ -231,7 +257,7 @@ class SensorNoiseInjector:
     handle real-world sensor imperfections.
     """
 
-    def __init__(self, config: SafetyConfig, rng: Optional[np.random.Generator] = None) -> None:
+    def __init__(self, config: SafetyConfig, rng: np.random.Generator | None = None) -> None:
         self.config = config
         self.rng = rng or np.random.default_rng()
 
@@ -389,6 +415,19 @@ class SafetyManager:
         self.watchdog.reset()
         return decision
 
+    def authorise(
+        self,
+        proposal: TacticalDecision,
+        state: BattlefieldState,
+    ) -> AuthorisedDecision:
+        """Validate a proposal and return the only form safe to execute.
+
+        A deep copy prevents a caller from retaining a mutable reference to the
+        exact object that is subsequently executed by the adapter.
+        """
+        validated = self.post_decision(proposal.model_copy(deep=True), state)
+        return AuthorisedDecision(decision=validated, safety_level=self.level)
+
     def inject_training_noise(self, state: BattlefieldState) -> BattlefieldState:
         """Inject sensor noise for training robustness."""
         return self.noise_injector.inject_state_noise(state)
@@ -476,7 +515,7 @@ class SafetyManager:
             confidence=1.0,
         )
 
-    def _find_drone(self, unit_id, state: BattlefieldState) -> Optional[DroneState]:
+    def _find_drone(self, unit_id, state: BattlefieldState) -> DroneState | None:
         if unit_id is None:
             return None
         for drone in state.friendly_units:
@@ -494,3 +533,26 @@ class SafetyManager:
             message=message,
             action_taken=action,
         ))
+
+
+class SafetyExecutionGateway:
+    """Authorise decisions before forwarding them to an execution adapter."""
+
+    def __init__(self, safety_manager: SafetyManager) -> None:
+        self._safety_manager = safety_manager
+
+    def authorise(
+        self,
+        proposal: TacticalDecision,
+        state: BattlefieldState,
+    ) -> AuthorisedDecision:
+        """Return a safety-authorised version of a policy proposal."""
+        return self._safety_manager.authorise(proposal, state)
+
+    def execute(
+        self,
+        executor: AuthorisedDecisionExecutor,
+        authorised: AuthorisedDecision,
+    ) -> StepResult:
+        """Execute exactly the decision that the safety manager authorised."""
+        return executor.step_decision(authorised.decision)

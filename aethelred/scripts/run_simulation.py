@@ -65,13 +65,13 @@ def main() -> None:
     logger.info("")
 
     # Run simulation with random policy
-    obs, info = env.reset(seed=args.seed)
+    _obs, info = env.reset(seed=args.seed)
 
     total_reward = 0.0
     for step in range(config.simulation.max_steps):
         # Random action
         action = env.action_space.sample()
-        obs, reward, terminated, truncated, info = env.step(action)
+        _obs, reward, terminated, truncated, info = env.step(action)
         total_reward += reward
 
         if step % 50 == 0:

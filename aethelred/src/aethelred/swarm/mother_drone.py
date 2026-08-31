@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 from aethelred.core.actions import TacticalDecision
 from aethelred.core.enums import DroneRole
@@ -27,7 +26,7 @@ class MotherDrone:
         tactical_policy: TacticalPolicy,
         learning_loop: LearningLoop,
         swarm_coordinator: SwarmCoordinator,
-        position: Optional[Vec2] = None,
+        position: Vec2 | None = None,
     ) -> None:
         self.tactical_policy = tactical_policy
         self.learning_loop = learning_loop

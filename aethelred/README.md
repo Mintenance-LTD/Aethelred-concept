@@ -21,6 +21,7 @@ learning/     PPO trainer (GAE, clipping, curriculum) + the 5-phase learning loo
 adaptation/   MAML + EWC + prioritized replay + threat classification ("Mahoraga")
 swarm/        Coordinator, mother drone, lightweight units, comms, distillation
 deployment/   Safety manager (geofence/watchdog/RTL) + ONNX/TorchScript export
+runtime/      Non-offensive mission, intent, safety-authorisation, and command contracts
 ```
 
 ## Install
@@ -65,6 +66,31 @@ ruff check .       # lint
 the environment reseeds Python's `random` on `reset(seed=...)`. With a fixed seed
 and fixed actions the simulation is deterministic.
 
+## Safety execution boundary
+
+The training path decodes a proposed Gym action once, sends the resulting
+`TacticalDecision` through `SafetyExecutionGateway`, and executes only the
+returned `AuthorisedDecision` via `AethelredEnv.step_decision()`. This ensures
+that emergency-stop, return-to-launch, geofence, and action-validator changes
+apply to the exact decision used by the simulator rather than to a separately
+decoded action.
+
+Runtime YAML is loaded strictly: unknown keys, malformed nested sections,
+invalid core values, and conflicting root/training device settings fail with a
+`ConfigurationError`.
+
+## Operational runtime foundation
+
+`aethelred.runtime` is a domain-neutral, non-offensive control boundary for
+future bounded uses such as survey, inspection, mapping, relay, and search.
+`IntentProposal` objects have no direct execution authority. An
+`OperationalSafetySupervisor` validates mission identity, vehicle assignment,
+capability allow-lists, state revision/freshness, expiry, and vehicle health;
+only its `AuthorisedCommand` can pass through `CommandArbiter` to an adapter.
+`SimulatorCommandAdapter` is the first adapter: it uses the simulator's
+decision-only execution path and maps every allowed operational capability to a
+non-offensive simulator action.
+
 ## Status / recent fixes
 
 The training and adaptation pipelines were previously non-functional. Fixed:
@@ -76,7 +102,7 @@ The training and adaptation pipelines were previously non-functional. Fixed:
 - **Adaptation** learns a real threat→counter mapping (not a constant), and the
   replay buffer and EWC are actually exercised for continual learning.
 - **Config** hyperparameters (`tactical_ai`, `state_encoder`) now drive model
-  construction instead of being ignored; the loader warns on unknown keys.
+  construction; runtime loading rejects unknown or malformed configuration.
 - **Sensor-noise injection** no longer mutates ground-truth state.
 - **Heterogeneous swarm:** the env decomposes one high-level command into per-role
   actions — ENGAGE units prosecute threats (distributed), RECON observe/evade, EW/RELAY

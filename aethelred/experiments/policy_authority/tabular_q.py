@@ -21,10 +21,10 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from aethelred.config.settings import AethelredConfig  # noqa: E402
-from aethelred.core.enums import EngagementOutcome  # noqa: E402
-from aethelred.simulation.environment import AethelredEnv  # noqa: E402
-from aethelred.utils.seeding import set_seed  # noqa: E402
+from aethelred.config.settings import AethelredConfig
+from aethelred.core.enums import EngagementOutcome
+from aethelred.simulation.environment import AethelredEnv
+from aethelred.utils.seeding import set_seed
 
 ACTION_NAMES = ["move", "engage", "evade", "formation_change", "recon", "relay", "retreat", "hold"]
 N_ACTIONS = len(ACTION_NAMES)
