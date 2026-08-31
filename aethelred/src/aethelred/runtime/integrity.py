@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
+from aethelred.runtime.audit import JsonlAuditJournal
 from aethelred.runtime.operational import IntentProposal
 
 
@@ -28,16 +29,26 @@ class AuthenticatedIntent:
 
 
 class IntentAuthenticator:
-    """Verify HMAC-protected intent envelopes and reject replayed nonces."""
+    """Verify HMAC-protected envelopes with durable, cross-process nonce use."""
 
-    def __init__(self, secret: bytes, max_age: timedelta = timedelta(seconds=30)) -> None:
+    def __init__(
+        self,
+        secret: bytes,
+        journal: JsonlAuditJournal,
+        max_age: timedelta = timedelta(seconds=30),
+    ) -> None:
         if len(secret) < 32:
             raise ValueError("Intent-authentication secret must contain at least 32 bytes")
         if max_age <= timedelta():
             raise ValueError("Intent-envelope max_age must be positive")
         self._secret = secret
+        self._journal = journal
         self._max_age = max_age
-        self._used_nonces: set[str] = set()
+
+    @property
+    def journal(self) -> JsonlAuditJournal:
+        """Return the durable journal that records consumed intent nonces."""
+        return self._journal
 
     def sign(
         self,
@@ -72,9 +83,17 @@ class IntentAuthenticator:
         )
         if not hmac.compare_digest(envelope.signature, expected):
             raise IntegrityError("Intent envelope signature is invalid")
-        if envelope.nonce in self._used_nonces:
+        nonce_record = self._journal.record_once(
+            "intent_nonce_consumed",
+            correlation_id=envelope.nonce,
+            payload={
+                "issuer_id": envelope.issuer_id,
+                "proposal_id": str(envelope.proposal.proposal_id),
+                "issued_at": envelope.issued_at,
+            },
+        )
+        if nonce_record is None:
             raise IntegrityError("Intent envelope nonce has already been used")
-        self._used_nonces.add(envelope.nonce)
         return envelope.proposal
 
     def _sign_payload(

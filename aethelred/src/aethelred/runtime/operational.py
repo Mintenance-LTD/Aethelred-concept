@@ -502,6 +502,8 @@ class AuthenticatedOperationalControlLoop:
             raise TypeError("Authenticated loop requires an AuthenticatedIntent")
         if not isinstance(self._mission_registry, MissionRegistry):
             raise TypeError("Authenticated loop requires a MissionRegistry")
+        if self._authenticator.journal is not self._control_loop._journal:
+            raise TypeError("Intent authenticator and control loop must share one audit journal")
         try:
             registered_mission = self._mission_registry.require_registered(mission)
         except MissionRegistryError as error:

@@ -39,6 +39,17 @@ def test_audit_journal_rejects_tampered_event_content(tmp_path) -> None:
         journal.read_all()
 
 
+def test_record_once_rejects_a_duplicate_idempotency_key(tmp_path) -> None:
+    journal = JsonlAuditJournal(tmp_path / "audit.jsonl")
+
+    first = journal.record_once("intent_nonce_consumed", "nonce-1", {"issuer": "planner"})
+    duplicate = journal.record_once("intent_nonce_consumed", "nonce-1", {"issuer": "planner"})
+
+    assert first is not None
+    assert duplicate is None
+    assert len(journal.read_all()) == 1
+
+
 def test_concurrent_journal_instances_preserve_one_hash_chain(tmp_path) -> None:
     path = tmp_path / "audit.jsonl"
 

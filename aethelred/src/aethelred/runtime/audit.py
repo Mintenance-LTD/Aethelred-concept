@@ -51,34 +51,63 @@ class JsonlAuditJournal:
     ) -> AuditEvent:
         """Persist one event and fsync it before acknowledging the write."""
         with self._append_lock():
-            existing_events = self.read_all()
-            previous_hash = existing_events[-1]["event_hash"] if existing_events else None
-            event_id = uuid4()
-            occurred_at = datetime.now(UTC)
-            unsigned_event: dict[str, Any] = {
-                "event_id": event_id,
-                "occurred_at": occurred_at,
-                "event_type": event_type,
-                "correlation_id": correlation_id,
-                "payload": payload,
-                "previous_hash": previous_hash,
-            }
-            event = AuditEvent(
-                event_id=event_id,
-                occurred_at=occurred_at,
-                event_type=event_type,
-                correlation_id=correlation_id,
-                payload=payload,
-                previous_hash=previous_hash,
-                event_hash=self._hash_event(unsigned_event),
-            )
-            self.path.parent.mkdir(parents=True, exist_ok=True)
-            encoded = self._canonical_json(asdict(event))
-            with self.path.open("a", encoding="utf-8", newline="\n") as handle:
-                handle.write(f"{encoded}\n")
-                handle.flush()
-                os.fsync(handle.fileno())
-            return event
+            return self._record_locked(event_type, correlation_id, payload)
+
+    def record_once(
+        self,
+        event_type: str,
+        correlation_id: str,
+        payload: dict[str, Any],
+    ) -> AuditEvent | None:
+        """Persist an event only if its type/correlation pair has not occurred.
+
+        The existence check and append share the same inter-process lock. This
+        makes the method suitable for durable idempotency keys such as signed
+        intent nonces.
+        """
+        with self._append_lock():
+            if any(
+                event.get("event_type") == event_type
+                and event.get("correlation_id") == correlation_id
+                for event in self.read_all()
+            ):
+                return None
+            return self._record_locked(event_type, correlation_id, payload)
+
+    def _record_locked(
+        self,
+        event_type: str,
+        correlation_id: str,
+        payload: dict[str, Any],
+    ) -> AuditEvent:
+        """Append an event while :meth:`_append_lock` is held."""
+        existing_events = self.read_all()
+        previous_hash = existing_events[-1]["event_hash"] if existing_events else None
+        event_id = uuid4()
+        occurred_at = datetime.now(UTC)
+        unsigned_event: dict[str, Any] = {
+            "event_id": event_id,
+            "occurred_at": occurred_at,
+            "event_type": event_type,
+            "correlation_id": correlation_id,
+            "payload": payload,
+            "previous_hash": previous_hash,
+        }
+        event = AuditEvent(
+            event_id=event_id,
+            occurred_at=occurred_at,
+            event_type=event_type,
+            correlation_id=correlation_id,
+            payload=payload,
+            previous_hash=previous_hash,
+            event_hash=self._hash_event(unsigned_event),
+        )
+        encoded = self._canonical_json(asdict(event))
+        with self.path.open("a", encoding="utf-8", newline="\n") as handle:
+            handle.write(f"{encoded}\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        return event
 
     @contextmanager
     def _append_lock(self):
