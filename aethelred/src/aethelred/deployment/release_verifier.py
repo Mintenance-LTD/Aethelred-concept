@@ -39,9 +39,9 @@ class ActiveReleaseVerifier:
         configuration: dict[str, object],
         observation_schema: str,
         runtime_target: str,
-        training_data_reference: str | None = None,
-        runtime_environment: str | None = None,
-        build_provenance: str | None = None,
+        training_data_reference: str,
+        runtime_environment: str,
+        build_provenance: str,
     ) -> VerifiedReleaseArtifact:
         """Verify all active-release provenance before exposing a loader path."""
         registration = self._ledger.active_registration()
@@ -69,9 +69,9 @@ class ActiveReleaseVerifier:
         configuration: dict[str, object],
         observation_schema: str,
         runtime_target: str,
-        training_data_reference: str | None = None,
-        runtime_environment: str | None = None,
-        build_provenance: str | None = None,
+        training_data_reference: str,
+        runtime_environment: str,
+        build_provenance: str,
     ) -> Model:
         """Invoke a caller-supplied model loader only after full provenance verification."""
         artifact = self.verify(

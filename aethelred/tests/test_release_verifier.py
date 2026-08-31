@@ -62,6 +62,9 @@ def test_active_release_verifier_loads_only_matching_active_artifact(tmp_path):
         configuration={"device": "cpu"},
         observation_schema="aethelred-observation/v1",
         runtime_target="torchscript",
+        training_data_reference="dataset://held-out/v1",
+        runtime_environment="python=3.11;torch=2.2",
+        build_provenance="build://ci/123",
     )
 
     assert result == "loaded-model"
@@ -72,6 +75,9 @@ def test_active_release_verifier_loads_only_matching_active_artifact(tmp_path):
         configuration={"device": "cpu"},
         observation_schema="aethelred-observation/v1",
         runtime_target="torchscript",
+        training_data_reference="dataset://held-out/v1",
+        runtime_environment="python=3.11;torch=2.2",
+        build_provenance="build://ci/123",
     ).registration == registration
 
 
@@ -96,5 +102,28 @@ def test_active_release_verifier_rejects_mismatch_before_loader_runs(tmp_path):
             configuration={"device": "cpu"},
             observation_schema="aethelred-observation/v1",
             runtime_target="torchscript",
+            training_data_reference="dataset://held-out/v1",
+            runtime_environment="python=3.11;torch=2.2",
+            build_provenance="build://ci/123",
         )
     assert not called
+
+
+def test_active_release_verifier_requires_matching_runtime_provenance(tmp_path):
+    model = tmp_path / "policy.pt"
+    report = tmp_path / "report.json"
+    model.write_bytes(b"approved-model")
+    report.write_text("evaluation evidence", encoding="utf-8")
+    ledger, _ = _activate_release(tmp_path, model)
+
+    with pytest.raises(ReleaseVerificationError):
+        ActiveReleaseVerifier(ledger).verify(
+            model,
+            code_revision="abc123",
+            configuration={"device": "cpu"},
+            observation_schema="aethelred-observation/v1",
+            runtime_target="torchscript",
+            training_data_reference="dataset://held-out/v1",
+            runtime_environment="python=3.11;torch=2.2",
+            build_provenance="build://ci/unapproved",
+        )

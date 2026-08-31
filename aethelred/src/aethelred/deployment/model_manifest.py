@@ -54,9 +54,9 @@ class ModelManifest:
         configuration: dict[str, object],
         observation_schema: str,
         runtime_target: str,
-        training_data_reference: str | None = None,
-        runtime_environment: str | None = None,
-        build_provenance: str | None = None,
+        training_data_reference: str,
+        runtime_environment: str,
+        build_provenance: str,
     ) -> Path:
         """Fail closed unless a runtime artefact matches this exact manifest."""
         model = Path(model_path)
@@ -76,11 +76,11 @@ class ModelManifest:
             raise ValueError("Runtime observation schema does not match the manifest")
         if runtime_target != self.runtime_target:
             raise ValueError("Runtime target does not match the manifest")
-        if training_data_reference is not None and training_data_reference != self.training_data_reference:
+        if training_data_reference != self.training_data_reference:
             raise ValueError("Training-data reference does not match the manifest")
-        if runtime_environment is not None and runtime_environment != self.runtime_environment:
+        if runtime_environment != self.runtime_environment:
             raise ValueError("Runtime environment does not match the manifest")
-        if build_provenance is not None and build_provenance != self.build_provenance:
+        if build_provenance != self.build_provenance:
             raise ValueError("Build provenance does not match the manifest")
         return model
 

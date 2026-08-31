@@ -79,6 +79,9 @@ def test_manifest_verification_rejects_artifact_or_runtime_drift(tmp_path):
         configuration={"target_return": 10.0, "device": "cpu"},
         observation_schema="aethelred-observation/v1",
         runtime_target="torchscript",
+        training_data_reference="dataset://held-out/v1",
+        runtime_environment="python=3.11;torch=2.2",
+        build_provenance="build://ci/123",
     ) == model
     model.write_bytes(b"substituted-model")
     with pytest.raises(ValueError, match="digest"):
@@ -88,6 +91,9 @@ def test_manifest_verification_rejects_artifact_or_runtime_drift(tmp_path):
             configuration=config,
             observation_schema="aethelred-observation/v1",
             runtime_target="torchscript",
+            training_data_reference="dataset://held-out/v1",
+            runtime_environment="python=3.11;torch=2.2",
+            build_provenance="build://ci/123",
         )
 
 
