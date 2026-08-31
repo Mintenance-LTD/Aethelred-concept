@@ -150,6 +150,9 @@ and issuer binding before the loop records a safety decision or reaches an adapt
 communications health, operator-link status, and runtime health. The safety
 supervisor rejects stale, non-finite, unhealthy, low-localisation, or unsafe-link
 state; low battery and lost links permit only `HOLD` or `RETURN_HOME` intents.
+Every verified proposal writes a hash-chained `telemetry_observed` record before
+its intent and safety-decision records, preserving the exact operational snapshot
+considered by the authoriser.
 
 `ActiveReleaseVerifier` is the runtime artefact boundary: it requires an active
 ledger registration and compares the exact model digest, filename, code revision,

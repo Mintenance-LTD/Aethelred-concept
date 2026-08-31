@@ -32,6 +32,7 @@ def test_authenticated_intent_is_verified_before_safety_and_execution(tmp_path) 
     assert adapter.command_id is not None
     assert [event["event_type"] for event in journal.read_all()] == [
         "intent_authenticated",
+        "telemetry_observed",
         "intent_proposed",
         "safety_decision",
         "command_execution_started",

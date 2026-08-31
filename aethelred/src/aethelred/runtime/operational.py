@@ -413,6 +413,24 @@ class OperationalControlLoop:
         """Journal a proposal, safety decision, and authorised execution result."""
         correlation_id = str(proposal.proposal_id)
         self._journal.record(
+            "telemetry_observed",
+            correlation_id=correlation_id,
+            payload={
+                "vehicle_id": state.vehicle_id,
+                "state_revision": state.revision,
+                "observed_at": state.observed_at,
+                "sensor_observed_at": state.sensor_observed_at,
+                "position": {"x": state.position.x, "y": state.position.y},
+                "healthy": state.healthy,
+                "navigation_valid": state.navigation_valid,
+                "battery_reserve": state.battery_reserve,
+                "localisation_quality": state.localisation_quality,
+                "communications_healthy": state.communications_healthy,
+                "operator_link_active": state.operator_link_active,
+                "runtime_healthy": state.runtime_healthy,
+            },
+        )
+        self._journal.record(
             "intent_proposed",
             correlation_id=correlation_id,
             payload={
