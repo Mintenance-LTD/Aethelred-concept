@@ -99,6 +99,12 @@ propagates them to swarm units. Candidates include a digest of their base
 weights and must pass independent evaluation, human approval, signing, and the
 deployment manifest process before any future use.
 
+`aethelred.deployment.ModelPromotionGate` now enforces this evidence boundary:
+a candidate needs held-out scenario coverage, improvement over its declared
+baseline on required metrics, recorded passing safety checks, a matching model
+manifest/report hash, and a named human approval. It creates an approval record
+only—it does not load a model or dispatch any command.
+
 ## Status / recent fixes
 
 The training and adaptation pipelines were previously non-functional. Fixed:
