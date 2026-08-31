@@ -174,14 +174,12 @@ python scripts/train.py --config configs/survival_train.yaml --episodes 120 --no
 Notes learned along the way: the default *composite* reward (survival + objectives +
 kills − losses) is not the same as survival, so naive training won't raise survival;
 a sharp `loss_penalty` plus strong `entropy_coef` (exploration) is needed for PPO to
-discover the evade/withdraw behavior. Checkpoints are selected by single-episode reward,
-which is noisy — the latest checkpoint is often a better survival policy than `best_policy.pt`.
+discover the evade/withdraw behavior. The trainer selects `best_policy.pt` by
+rolling reward over its most recent 100 episodes; release promotion separately
+requires held-out evidence.
 
-### Known remaining work (design notes, not bugs)
+### Remaining deployment-context work
 
-- The TorchScript deployment exporter scripts the inference wrapper first and
-  falls back to tracing only for runtime compatibility. The scripted path is
-  exercised directly in the test suite.
-- Checkpoint selection uses the rolling 100-episode reward aggregate rather than
-  a single rollout. A future release process should still prefer a fully separate,
-  held-out evaluation suite when simulation resources permit it.
+- Hardware-in-the-loop validation, actuator protocol integration, and credential
+  management need an authorized target platform and operational environment; they
+  are deliberately not simulated as real-world deployment claims in this repository.
