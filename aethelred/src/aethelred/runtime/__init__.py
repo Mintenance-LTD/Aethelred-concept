@@ -27,6 +27,7 @@ from aethelred.runtime.operational import (
     OperatingArea,
     OperationalControlLoop,
     OperationalSafetySupervisor,
+    RuntimeIdentity,
     WorldState,
 )
 from aethelred.runtime.simulator_adapter import SimulatorCommandAdapter
@@ -57,6 +58,7 @@ __all__ = [
     "RuntimeConfiguration",
     "RuntimeConfigurationError",
     "RuntimeConfigurationRegistry",
+    "RuntimeIdentity",
     "RuntimeLifecycleError",
     "RuntimeLifecycleState",
     "RuntimeLifecycleSupervisor",

@@ -8,6 +8,7 @@ executable command.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from enum import Enum
@@ -104,6 +105,35 @@ class WorldState:
     communications_healthy: bool
     operator_link_active: bool
     runtime_healthy: bool
+
+
+@dataclass(frozen=True)
+class RuntimeIdentity:
+    """Immutable release identities that make an operational audit trace attributable."""
+
+    release_id: UUID
+    software_revision: str
+    model_sha256: str
+    configuration_sha256: str
+
+    def __post_init__(self) -> None:
+        if not self.software_revision.strip():
+            raise ValueError("Runtime software revision is required")
+        for value, name in (
+            (self.model_sha256, "model digest"),
+            (self.configuration_sha256, "configuration digest"),
+        ):
+            if re.fullmatch(r"[0-9a-f]{64}", value) is None:
+                raise ValueError(f"Runtime {name} must be a lowercase SHA-256 digest")
+
+    def audit_payload(self) -> dict[str, str]:
+        """Return identity metadata suitable for structured audit payloads."""
+        return {
+            "release_id": str(self.release_id),
+            "software_revision": self.software_revision,
+            "model_sha256": self.model_sha256,
+            "configuration_sha256": self.configuration_sha256,
+        }
 
 
 @dataclass(frozen=True)
@@ -274,8 +304,13 @@ class OperationalSafetySupervisor:
 class CommandArbiter:
     """The sole execution boundary for an authorised operational command."""
 
-    def __init__(self, journal: JsonlAuditJournal | None = None) -> None:
+    def __init__(
+        self,
+        journal: JsonlAuditJournal | None = None,
+        runtime_identity: RuntimeIdentity | None = None,
+    ) -> None:
         self._journal = journal
+        self._runtime_identity = runtime_identity
         self._consumed_command_ids: set[UUID] = set()
         if journal is not None:
             self._recover_consumed_commands()
@@ -316,6 +351,7 @@ class CommandArbiter:
                 "command_execution_started",
                 correlation_id=str(command.command_id),
                 payload={
+                    **self._identity_payload(),
                     "proposal_id": str(command.proposal_id),
                     "mission_id": str(command.mission_id),
                     "vehicle_id": command.vehicle_id,
@@ -345,6 +381,7 @@ class CommandArbiter:
                     "command_nacked",
                     correlation_id=str(command.command_id),
                     payload={
+                        **self._identity_payload(),
                         "proposal_id": str(command.proposal_id),
                         "mission_id": str(command.mission_id),
                         "vehicle_id": command.vehicle_id,
@@ -358,6 +395,7 @@ class CommandArbiter:
                 "command_executed",
                 correlation_id=str(command.command_id),
                 payload={
+                    **self._identity_payload(),
                     "proposal_id": str(command.proposal_id),
                     "mission_id": str(command.mission_id),
                     "vehicle_id": command.vehicle_id,
@@ -399,8 +437,11 @@ class CommandArbiter:
             self._journal.record(
                 "command_rejected",
                 correlation_id=correlation_id,
-                payload={"reason": reason, "rule_ids": rule_ids},
+                payload={**self._identity_payload(), "reason": reason, "rule_ids": rule_ids},
             )
+
+    def _identity_payload(self) -> dict[str, str]:
+        return {} if self._runtime_identity is None else self._runtime_identity.audit_payload()
 
 
 class OperationalControlLoop:
@@ -415,10 +456,17 @@ class OperationalControlLoop:
         self,
         safety_supervisor: OperationalSafetySupervisor,
         journal: JsonlAuditJournal,
+        runtime_identity: RuntimeIdentity | None = None,
     ) -> None:
         self._safety_supervisor = safety_supervisor
         self._journal = journal
-        self._arbiter = CommandArbiter(journal)
+        self._runtime_identity = runtime_identity
+        self._arbiter = CommandArbiter(journal, runtime_identity)
+
+    @property
+    def runtime_identity(self) -> RuntimeIdentity | None:
+        """Return the immutable attribution record bound to this command path."""
+        return self._runtime_identity
 
     def submit(
         self,
@@ -451,6 +499,7 @@ class OperationalControlLoop:
             "telemetry_observed",
             correlation_id=correlation_id,
             payload={
+                **self._identity_payload(),
                 "vehicle_id": state.vehicle_id,
                 "state_revision": state.revision,
                 "observed_at": state.observed_at,
@@ -469,6 +518,7 @@ class OperationalControlLoop:
             "intent_proposed",
             correlation_id=correlation_id,
             payload={
+                **self._identity_payload(),
                 "policy_id": proposal.policy_id,
                 "mission_id": str(proposal.mission_id),
                 "mission_revision": proposal.mission_revision,
@@ -482,6 +532,7 @@ class OperationalControlLoop:
             "safety_decision",
             correlation_id=correlation_id,
             payload={
+                **self._identity_payload(),
                 "outcome": result.outcome.value,
                 "rule_ids": result.rule_ids,
                 "reason": result.reason,
@@ -489,6 +540,9 @@ class OperationalControlLoop:
             },
         )
         return self._arbiter.execute(executor, result, now)
+
+    def _identity_payload(self) -> dict[str, str]:
+        return {} if self._runtime_identity is None else self._runtime_identity.audit_payload()
 
 
 class AuthenticatedOperationalControlLoop:
@@ -534,6 +588,8 @@ class AuthenticatedOperationalControlLoop:
             raise TypeError("Authenticated loop requires a MissionRegistry")
         if not isinstance(self._lifecycle, RuntimeLifecycleSupervisor):
             raise TypeError("Authenticated loop requires a RuntimeLifecycleSupervisor")
+        if self._control_loop.runtime_identity is None:
+            raise TypeError("Authenticated loop requires a RuntimeIdentity")
         if self._authenticator.journal is not self._control_loop._journal:
             raise TypeError("Intent authenticator and control loop must share one audit journal")
         try:
@@ -566,6 +622,7 @@ class AuthenticatedOperationalControlLoop:
             "intent_authenticated",
             correlation_id=str(proposal.proposal_id),
             payload={
+                **self._control_loop._identity_payload(),
                 "issuer_id": envelope.issuer_id,
                 "key_id": envelope.key_id,
                 "nonce": envelope.nonce,
