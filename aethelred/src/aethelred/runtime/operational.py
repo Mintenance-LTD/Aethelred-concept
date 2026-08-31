@@ -90,6 +90,12 @@ class WorldState:
     position: Vec2
     healthy: bool
     navigation_valid: bool
+    battery_reserve: float
+    localisation_quality: float
+    sensor_observed_at: datetime
+    communications_healthy: bool
+    operator_link_active: bool
+    runtime_healthy: bool
 
 
 @dataclass(frozen=True)
@@ -153,6 +159,9 @@ class OperationalSafetySupervisor:
     """Deterministically validates mission, state, and command freshness."""
 
     max_state_age: timedelta = field(default=timedelta(seconds=2))
+    max_sensor_age: timedelta = field(default=timedelta(seconds=1))
+    min_battery_reserve: float = 0.20
+    min_localisation_quality: float = 0.75
 
     def authorise(
         self,
@@ -170,12 +179,18 @@ class OperationalSafetySupervisor:
             mission.valid_from,
             mission.valid_until,
             state.observed_at,
+            state.sensor_observed_at,
             proposal.expires_at,
         )
         if any(timestamp.tzinfo is None for timestamp in timestamps):
             return self._reject("timestamp_timezone", "Safety timestamps must be timezone-aware")
         if state.observed_at > checked_at:
             return self._reject("state_timestamp", "World state observation is in the future")
+        if state.sensor_observed_at > checked_at:
+            return self._reject("sensor_timestamp", "Sensor observation is in the future")
+        telemetry_values = (state.battery_reserve, state.localisation_quality)
+        if not all(isfinite(value) and 0.0 <= value <= 1.0 for value in telemetry_values):
+            return self._reject("telemetry_values", "Operational telemetry values must be finite ratios")
         if proposal.mission_id != mission.mission_id or proposal.mission_revision != mission.revision:
             return self._reject("mission_identity", "Proposal does not match the approved mission")
         if proposal.vehicle_id != state.vehicle_id or proposal.vehicle_id not in mission.assigned_vehicle_ids:
@@ -194,10 +209,26 @@ class OperationalSafetySupervisor:
             return self._reject("state_revision", "Proposal was made from stale world state")
         if checked_at - state.observed_at > self.max_state_age:
             return self._reject("state_freshness", "World state has expired")
+        if checked_at - state.sensor_observed_at > self.max_sensor_age:
+            return self._reject("sensor_freshness", "Sensor data has expired")
         if checked_at >= proposal.expires_at:
             return self._reject("command_expiry", "Proposal has expired")
-        if not state.healthy or not state.navigation_valid:
-            return self._reject("vehicle_health", "Vehicle health or navigation is invalid")
+        if not state.healthy or not state.navigation_valid or not state.runtime_healthy:
+            return self._reject("runtime_health", "Vehicle, navigation, or runtime health is invalid")
+        if state.localisation_quality < self.min_localisation_quality:
+            return self._reject("localisation_quality", "Localisation quality is below the mission threshold")
+        if state.battery_reserve < self.min_battery_reserve and proposal.capability not in {
+            MissionCapability.HOLD,
+            MissionCapability.RETURN_HOME,
+        }:
+            return self._reject("battery_reserve", "Battery reserve permits only hold or return-home")
+        if (
+            not state.communications_healthy or not state.operator_link_active
+        ) and proposal.capability not in {MissionCapability.HOLD, MissionCapability.RETURN_HOME}:
+            return self._reject(
+                "operator_link",
+                "Communications or operator link permits only hold or return-home",
+            )
 
         rule_ids.append("authorised")
         command = AuthorisedCommand(

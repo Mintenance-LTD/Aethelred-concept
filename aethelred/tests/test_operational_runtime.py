@@ -76,6 +76,12 @@ def _runtime_inputs() -> tuple[Mission, WorldState, IntentProposal, datetime]:
         position=Vec2(x=50.0, y=50.0),
         healthy=True,
         navigation_valid=True,
+        battery_reserve=0.80,
+        localisation_quality=0.95,
+        sensor_observed_at=now,
+        communications_healthy=True,
+        operator_link_active=True,
+        runtime_healthy=True,
     )
     proposal = IntentProposal(
         proposal_id=uuid4(),
@@ -147,6 +153,57 @@ def test_operating_area_rejects_invalid_bounds_and_non_finite_positions():
         OperatingArea(minimum=Vec2(x=2.0, y=0.0), maximum=Vec2(x=1.0, y=1.0))
     area = OperatingArea(minimum=Vec2(x=0.0, y=0.0), maximum=Vec2(x=1.0, y=1.0))
     assert not area.contains(Vec2(x=float("nan"), y=0.0))
+
+
+@pytest.mark.parametrize(
+    ("changes", "expected_rule"),
+    [
+        ({"battery_reserve": 0.19}, "battery_reserve"),
+        ({"localisation_quality": 0.74}, "localisation_quality"),
+        ({"sensor_observed_at": datetime.now(UTC) - timedelta(seconds=2)}, "sensor_freshness"),
+        ({"communications_healthy": False}, "operator_link"),
+        ({"operator_link_active": False}, "operator_link"),
+        ({"runtime_healthy": False}, "runtime_health"),
+        ({"battery_reserve": float("nan")}, "telemetry_values"),
+    ],
+)
+def test_runtime_health_constraints_fail_closed(changes, expected_rule):
+    mission, state, proposal, now = _runtime_inputs()
+    if "sensor_observed_at" in changes:
+        changes = {**changes, "sensor_observed_at": now - timedelta(seconds=2)}
+    constrained_state = WorldState(**{**state.__dict__, **changes})
+
+    result = OperationalSafetySupervisor().authorise(proposal, constrained_state, mission, now)
+
+    assert result.outcome is AuthorisationOutcome.REJECTED
+    assert result.rule_ids == (expected_rule,)
+
+
+def test_low_reserve_and_lost_link_allow_return_home_or_hold():
+    mission, state, proposal, now = _runtime_inputs()
+    constrained_state = WorldState(
+        **{
+            **state.__dict__,
+            "battery_reserve": 0.19,
+            "communications_healthy": False,
+            "operator_link_active": False,
+        }
+    )
+    return_proposal = IntentProposal(
+        **{**proposal.__dict__, "capability": MissionCapability.RETURN_HOME}
+    )
+    permitted_mission = Mission(
+        **{
+            **mission.__dict__,
+            "allowed_capabilities": frozenset({MissionCapability.RETURN_HOME}),
+        }
+    )
+
+    result = OperationalSafetySupervisor().authorise(
+        return_proposal, constrained_state, permitted_mission, now
+    )
+
+    assert result.outcome is AuthorisationOutcome.AUTHORISED
 
 
 def test_command_expiry_replay_and_restart_are_rejected(tmp_path):

@@ -146,6 +146,11 @@ authorisation or execution.
 must use `AuthenticatedOperationalControlLoop`, which verifies the signed envelope
 and issuer binding before the loop records a safety decision or reaches an adapter.
 
+`WorldState` includes battery reserve, localisation quality, sensor timestamp,
+communications health, operator-link status, and runtime health. The safety
+supervisor rejects stale, non-finite, unhealthy, low-localisation, or unsafe-link
+state; low battery and lost links permit only `HOLD` or `RETURN_HOME` intents.
+
 `ActiveReleaseVerifier` is the runtime artefact boundary: it requires an active
 ledger registration and compares the exact model digest, filename, code revision,
 canonical runtime configuration, observation schema, and runtime target before it
