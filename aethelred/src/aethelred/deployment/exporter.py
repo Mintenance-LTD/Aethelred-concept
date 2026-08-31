@@ -13,11 +13,10 @@ import logging
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
 
-import torch
-import torch.nn as nn
 import numpy as np
+import torch
+from torch import nn
 
 from aethelred.tactical_ai.policy import TacticalPolicy
 
@@ -53,7 +52,7 @@ class ExportResult:
     format: str
     path: Path
     size_bytes: int
-    latency: Optional[LatencyProfile] = None
+    latency: LatencyProfile | None = None
 
     @property
     def size_mb(self) -> float:
@@ -87,7 +86,7 @@ class ModelExporter:
         # the export round-trip test validates correctness instead.
         try:
             scripted = torch.jit.trace(wrapper, dummy, check_trace=False)
-        except Exception:
+        except (RuntimeError, ValueError):
             logger.warning("Tracing failed, falling back to scripting")
             scripted = torch.jit.script(wrapper)
 
@@ -239,7 +238,7 @@ class ModelExporter:
         if include_onnx:
             try:
                 results["onnx"] = self.export_onnx(policy, f"{name}_onnx")
-            except Exception as e:
+            except (OSError, RuntimeError, ValueError) as e:
                 logger.warning(f"ONNX export failed: {e}")
 
         # Latency profile

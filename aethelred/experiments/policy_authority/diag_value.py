@@ -12,15 +12,15 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
-import torch  # noqa: E402
-import torch.nn.functional as F  # noqa: E402
+import torch
+import torch.nn.functional as F
 
-from aethelred.config.settings import AethelredConfig  # noqa: E402
-from aethelred.learning.trainer import ValueHead  # noqa: E402
-from aethelred.simulation.environment import AethelredEnv  # noqa: E402
-from aethelred.tactical_ai.policy import TacticalPolicy  # noqa: E402
-from aethelred.tactical_ai.state_encoder import BattlefieldStateEncoder  # noqa: E402
-from aethelred.utils.seeding import set_seed  # noqa: E402
+from aethelred.config.settings import AethelredConfig
+from aethelred.learning.trainer import ValueHead
+from aethelred.simulation.environment import AethelredEnv
+from aethelred.tactical_ai.policy import TacticalPolicy
+from aethelred.tactical_ai.state_encoder import BattlefieldStateEncoder
+from aethelred.utils.seeding import set_seed
 
 ACTION = ["move", "engage", "evade", "formation_change", "recon", "relay", "retreat", "hold"]
 

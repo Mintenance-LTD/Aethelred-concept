@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import random
-from typing import Any, Optional
+from typing import Any
 from uuid import UUID
 
 import gymnasium as gym
 import numpy as np
 
 from aethelred.config.settings import SimulationConfig
+from aethelred.core.actions import TacticalAction, TacticalDecision
 from aethelred.core.enums import (
     DroneRole,
     EngagementOutcome,
@@ -17,7 +18,6 @@ from aethelred.core.enums import (
     TacticalActionType,
     ThreatType,
 )
-from aethelred.core.actions import TacticalAction, TacticalDecision
 from aethelred.core.events import LossEvent
 from aethelred.core.models import BattlefieldState, DroneState, ObjectiveState, Vec2
 from aethelred.simulation.battlefield import Battlefield
@@ -30,20 +30,24 @@ from aethelred.swarm.swarm_unit import SwarmUnit
 from aethelred.tactical_ai.state_encoder import build_observation
 
 
-class AethelredEnv(gym.Env):
+class AethelredEnv(gym.Env[Any, Any]):
     """
     2D continuous-space tactical simulation environment.
     Gymnasium-compatible for standard RL training loops.
     """
 
-    metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 30}
+    metadata: dict[str, object]
 
     def __init__(
         self,
-        config: Optional[SimulationConfig] = None,
-        render_mode: Optional[str] = None,
+        config: SimulationConfig | None = None,
+        render_mode: str | None = None,
     ) -> None:
         super().__init__()
+        self.metadata = {
+            "render_modes": ["human", "rgb_array"],
+            "render_fps": 30,
+        }
         self.config = config or SimulationConfig()
         self.render_mode = render_mode
 
@@ -51,7 +55,7 @@ class AethelredEnv(gym.Env):
         self.entity_manager = EntityManager(self.config)
         self.threat_spawner = ThreatSpawner(self.config.threats)
         self.physics = SimplePhysics(self.config.physics)
-        self._renderer: Optional[BattlefieldRenderer] = None
+        self._renderer: BattlefieldRenderer | None = None
 
         # Comms: units beyond range / under EW jamming fall back to autonomy.
         # The command node sits at the swarm rally point (matches spawn center),
@@ -67,7 +71,7 @@ class AethelredEnv(gym.Env):
 
         self._step_count = 0
         self._total_reward = 0.0
-        self._current_state: Optional[BattlefieldState] = None
+        self._current_state: BattlefieldState | None = None
 
         # Define spaces
         max_f = 32  # max friendlies
@@ -110,8 +114,8 @@ class AethelredEnv(gym.Env):
 
     def reset(
         self,
-        seed: Optional[int] = None,
-        options: Optional[dict[str, Any]] = None,
+        seed: int | None = None,
+        options: dict[str, Any] | None = None,
     ) -> tuple[dict[str, np.ndarray], dict[str, Any]]:
         super().reset(seed=seed)
         # Seed ALL randomness sources, not just NumPy: physics/comms/threat
@@ -160,11 +164,24 @@ class AethelredEnv(gym.Env):
     def step(
         self, action: dict[str, Any]
     ) -> tuple[dict[str, np.ndarray], float, bool, bool, dict[str, Any]]:
+        """Decode a Gym action and execute its resulting decision.
+
+        Training and operational-style callers should use ``step_decision`` so
+        that a safety-authorised decision is executed without re-decoding.
+        """
+        return self.step_decision(self._decode_action(action))
+
+    def step_decision(
+        self, decision: TacticalDecision
+    ) -> tuple[dict[str, np.ndarray], float, bool, bool, dict[str, Any]]:
+        """Execute one already-decoded, safety-authorised decision exactly once."""
         state_before = self._current_state
         assert state_before is not None
-
-        # Decode action into TacticalDecision
-        decision = self._decode_action(action)
+        if decision.timestep != self._step_count:
+            raise ValueError(
+                "Decision timestep does not match the current simulation timestep: "
+                f"{decision.timestep} != {self._step_count}"
+            )
 
         # Apply movement
         self.entity_manager.apply_decision(decision, self.physics, self.battlefield)
@@ -216,7 +233,7 @@ class AethelredEnv(gym.Env):
             self._get_info(),
         )
 
-    def render(self) -> Optional[np.ndarray]:
+    def render(self) -> np.ndarray | None:
         if self._renderer is None:
             self._renderer = BattlefieldRenderer(self.config.render)
         if self._current_state is None:
@@ -237,7 +254,7 @@ class AethelredEnv(gym.Env):
     def get_all_engagements(self):
         return self.entity_manager.get_all_engagements()
 
-    def get_current_state(self) -> Optional[BattlefieldState]:
+    def get_current_state(self) -> BattlefieldState | None:
         return self._current_state
 
     def _build_state(self) -> BattlefieldState:
@@ -340,7 +357,7 @@ class AethelredEnv(gym.Env):
         ]
         return unit.act(drone, nearby)
 
-    def _nearest_anticipated(self, pos: Vec2) -> Optional[Vec2]:
+    def _nearest_anticipated(self, pos: Vec2) -> Vec2 | None:
         if not self._anticipated_threats:
             return None
         return min(self._anticipated_threats, key=lambda p: pos.distance_to(p))
@@ -359,7 +376,7 @@ class AethelredEnv(gym.Env):
         retreat, move). This makes the fight/withdraw decision a learned choice
         rather than a hardcoded reflex.
         """
-        base = dict(target_unit_id=drone.id, formation=formation, priority=priority)
+        base = {"target_unit_id": drone.id, "formation": formation, "priority": priority}
 
         # Retreat is obeyed by everyone regardless of role.
         if cmd == TacticalActionType.RETREAT:
@@ -407,7 +424,7 @@ class AethelredEnv(gym.Env):
         state_before: BattlefieldState,
         state_after: BattlefieldState,
         losses: list[LossEvent],
-        engagements: Optional[list] = None,
+        engagements: list | None = None,
     ) -> float:
         """Compute composite reward."""
         w = self.config.reward_weights
@@ -446,9 +463,7 @@ class AethelredEnv(gym.Env):
         if not self.entity_manager.get_active_drones():
             return True
         # All objectives completed
-        if hasattr(self, "_objectives") and all(o.is_completed for o in self._objectives):
-            return True
-        return False
+        return hasattr(self, "_objectives") and all(o.is_completed for o in self._objectives)
 
     def _get_info(self) -> dict[str, Any]:
         return {

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import math
-from typing import Optional
 from uuid import UUID, uuid4
 
 import numpy as np
@@ -202,7 +201,7 @@ class BattlefieldState(BaseModel):
     friendly_units: list[DroneState] = Field(default_factory=list)
     threats: list[ThreatState] = Field(default_factory=list)
     objectives: list[ObjectiveState] = Field(default_factory=list)
-    terrain_grid: Optional[np.ndarray] = Field(default=None)
+    terrain_grid: np.ndarray | None = Field(default=None)
     global_comms_degradation: float = Field(default=0.0, ge=0.0, le=1.0)
     weather_visibility: float = Field(default=1.0, ge=0.0, le=1.0)
 
@@ -224,13 +223,13 @@ class BattlefieldState(BaseModel):
     def num_total(self) -> int:
         return len(self.friendly_units)
 
-    def get_unit_by_id(self, unit_id: UUID) -> Optional[DroneState]:
+    def get_unit_by_id(self, unit_id: UUID) -> DroneState | None:
         for u in self.friendly_units:
             if u.id == unit_id:
                 return u
         return None
 
-    def get_threat_by_id(self, threat_id: UUID) -> Optional[ThreatState]:
+    def get_threat_by_id(self, threat_id: UUID) -> ThreatState | None:
         for t in self.threats:
             if t.id == threat_id:
                 return t

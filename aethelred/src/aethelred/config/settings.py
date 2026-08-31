@@ -3,13 +3,19 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+import math
+from collections.abc import Mapping
+from dataclasses import dataclass, field, fields, is_dataclass
 from pathlib import Path
 from typing import Any
 
 import yaml
 
 logger = logging.getLogger(__name__)
+
+
+class ConfigurationError(ValueError):
+    """Raised when a runtime configuration is malformed or unsafe to use."""
 
 
 
@@ -193,35 +199,75 @@ class AethelredConfig:
     def from_yaml(cls, path: str | Path) -> AethelredConfig:
         with open(path) as f:
             data = yaml.safe_load(f) or {}
+        if not isinstance(data, dict):
+            raise ConfigurationError("Configuration root must be a mapping")
         return cls._from_dict(data)
 
     @classmethod
     def _from_dict(cls, data: dict[str, Any]) -> AethelredConfig:
         config = cls()
-        for key, value in data.items():
-            if not hasattr(config, key):
-                logger.warning("Unknown config key ignored: %r", key)
-                continue
-            attr = getattr(config, key)
-            if isinstance(attr, (SimulationConfig, DecisionTransformerConfig,
-                                 StateEncoderConfig, AdaptationConfig,
-                                 TrainerConfig, LearningLoopConfig)):
-                if isinstance(value, dict):
-                    for sub_key, sub_value in value.items():
-                        if not hasattr(attr, sub_key):
-                            logger.warning("Unknown config key ignored: %s.%s", key, sub_key)
-                            continue
-                        sub_attr = getattr(attr, sub_key)
-                        if hasattr(sub_attr, '__dataclass_fields__') and isinstance(sub_value, dict):
-                            for k, v in sub_value.items():
-                                if hasattr(sub_attr, k):
-                                    setattr(sub_attr, k, v)
-                                else:
-                                    logger.warning(
-                                        "Unknown config key ignored: %s.%s.%s", key, sub_key, k
-                                    )
-                        else:
-                            setattr(attr, sub_key, sub_value)
-            else:
-                setattr(config, key, value)
+        cls._apply_mapping(config, data, path="config")
+
+        root_device_supplied = "device" in data
+        training_data = data.get("training")
+        training_device_supplied = isinstance(training_data, dict) and "device" in training_data
+        if root_device_supplied and training_device_supplied and config.device != config.training.device:
+            raise ConfigurationError(
+                "config.device and config.training.device must match when both are supplied"
+            )
+        if root_device_supplied:
+            config.training.device = config.device
+        elif training_device_supplied:
+            config.device = config.training.device
+
+        cls._validate(config)
         return config
+
+    @staticmethod
+    def _apply_mapping(target: Any, values: Mapping[str, Any], path: str) -> None:
+        """Apply a mapping recursively while rejecting unknown configuration keys."""
+        known_fields = {item.name for item in fields(target)}
+        unknown_keys = sorted(set(values) - known_fields)
+        if unknown_keys:
+            unknown = ", ".join(f"{path}.{key}" for key in unknown_keys)
+            raise ConfigurationError(f"Unknown configuration key(s): {unknown}")
+
+        for key, value in values.items():
+            current = getattr(target, key)
+            key_path = f"{path}.{key}"
+            if is_dataclass(current):
+                if not isinstance(value, Mapping):
+                    raise ConfigurationError(f"{key_path} must be a mapping")
+                AethelredConfig._apply_mapping(current, value, key_path)
+            elif isinstance(current, dict):
+                if not isinstance(value, Mapping):
+                    raise ConfigurationError(f"{key_path} must be a mapping")
+                setattr(target, key, dict(value))
+            else:
+                setattr(target, key, value)
+
+    @staticmethod
+    def _validate(config: AethelredConfig) -> None:
+        """Validate safety-critical and simulation invariants before execution."""
+        if config.simulation.battlefield.width <= 0 or config.simulation.battlefield.height <= 0:
+            raise ConfigurationError("battlefield width and height must be positive")
+        if config.simulation.battlefield.grid_resolution <= 0:
+            raise ConfigurationError("battlefield grid_resolution must be positive")
+        if config.simulation.physics.dt <= 0:
+            raise ConfigurationError("physics dt must be positive")
+        if config.simulation.max_steps <= 0:
+            raise ConfigurationError("simulation max_steps must be positive")
+        if config.training.update_interval <= 0 or config.training.batch_size <= 0:
+            raise ConfigurationError("training update_interval and batch_size must be positive")
+        if config.training.learning_rate <= 0:
+            raise ConfigurationError("training learning_rate must be positive")
+        if any(count < 0 for count in (
+            config.simulation.swarm.num_recon,
+            config.simulation.swarm.num_engage,
+            config.simulation.swarm.num_ew,
+            config.simulation.swarm.num_relay,
+        )):
+            raise ConfigurationError("swarm unit counts must not be negative")
+        for name, weight in config.simulation.reward_weights.items():
+            if not isinstance(weight, (int, float)) or not math.isfinite(weight):
+                raise ConfigurationError(f"reward weight {name!r} must be finite")

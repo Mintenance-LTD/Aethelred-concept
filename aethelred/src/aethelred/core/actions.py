@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -15,10 +14,10 @@ class TacticalAction(BaseModel):
     """A single tactical decision for one unit or the swarm."""
 
     action_type: TacticalActionType
-    target_unit_id: Optional[UUID] = None
-    target_position: Optional[Vec2] = None
-    target_threat_id: Optional[UUID] = None
-    formation: Optional[FormationType] = None
+    target_unit_id: UUID | None = None
+    target_position: Vec2 | None = None
+    target_threat_id: UUID | None = None
+    formation: FormationType | None = None
     priority: float = Field(default=0.5, ge=0.0, le=1.0)
     parameters: dict[str, float] = Field(default_factory=dict)
 
@@ -29,4 +28,4 @@ class TacticalDecision(BaseModel):
     timestep: int
     actions: list[TacticalAction] = Field(default_factory=list)
     confidence: float = Field(default=0.5, ge=0.0, le=1.0)
-    reasoning_embedding: Optional[list[float]] = None
+    reasoning_embedding: list[float] | None = None

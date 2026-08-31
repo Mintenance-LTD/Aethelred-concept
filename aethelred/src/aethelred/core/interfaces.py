@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Optional
+from typing import Any
 
 import torch
-import torch.nn as nn
+from torch import nn
 
 from aethelred.core.actions import TacticalAction, TacticalDecision
 from aethelred.core.events import LossEvent
@@ -69,7 +69,7 @@ class SimulationInterface(ABC):
     """Contract for simulation environments."""
 
     @abstractmethod
-    def reset(self, scenario: Optional[dict[str, Any]] = None) -> BattlefieldState: ...
+    def reset(self, scenario: dict[str, Any] | None = None) -> BattlefieldState: ...
 
     @abstractmethod
     def step(

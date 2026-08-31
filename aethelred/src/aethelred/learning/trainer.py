@@ -16,12 +16,11 @@ import math
 from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 
 import numpy as np
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
+from torch import nn
 from torch.utils.tensorboard import SummaryWriter
 
 from aethelred.config.settings import TrainerConfig
@@ -43,7 +42,14 @@ class RolloutStep:
     reward: float
     value: float
     log_prob: float
-    done: bool
+    terminated: bool = False
+    truncated: bool = False
+    bootstrap_value: float | None = None
+
+    @property
+    def episode_boundary(self) -> bool:
+        """Whether the following observation belongs to a new episode."""
+        return self.terminated or self.truncated
 
 
 @dataclass
@@ -65,18 +71,25 @@ class RolloutBuffer:
         ``reward_scale`` divides rewards into the value head's (normalized) units;
         since stored ``step.value`` is already in that scale, GAE stays consistent.
         """
-        advantages = []
-        returns = []
+        advantages: list[float] = []
+        returns: list[float] = []
         gae = 0.0
         next_value = 0.0
 
         for step in reversed(self.steps):
-            if step.done:
-                next_value = 0.0
-                gae = 0.0
+            # A time limit is not an MDP terminal: retain a value bootstrap for
+            # its final observation while preventing leakage into the next reset
+            # episode.
+            if step.terminated:
+                successor_value = 0.0
+            elif step.truncated:
+                successor_value = step.bootstrap_value if step.bootstrap_value is not None else 0.0
+            else:
+                successor_value = next_value
 
-            delta = step.reward * reward_scale + gamma * next_value - step.value
-            gae = delta + gamma * lam * gae
+            delta = step.reward * reward_scale + gamma * successor_value - step.value
+            continuation = 0.0 if step.episode_boundary else 1.0
+            gae = delta + gamma * lam * continuation * gae
             advantages.insert(0, gae)
             returns.insert(0, gae + step.value)
             next_value = step.value
@@ -88,7 +101,7 @@ class RolloutBuffer:
         rets = []
         running = 0.0
         for step in reversed(self.steps):
-            if step.done:
+            if step.episode_boundary:
                 running = 0.0
             running = step.reward + gamma * running
             rets.append(running)
@@ -227,8 +240,8 @@ class CheckpointManager:
         episode: int,
         reward: float,
         metrics: dict,
-        value_head: Optional[nn.Module] = None,
-        optimizer: Optional[torch.optim.Optimizer] = None,
+        value_head: nn.Module | None = None,
+        optimizer: torch.optim.Optimizer | None = None,
     ) -> Path:
         """Save a checkpoint."""
         checkpoint = {
@@ -350,7 +363,7 @@ class PPOTrainer:
         # Keep the policy's return-to-go conditioning in sync with the trainer so
         # forward_step uses a consistent RTG for both training and inference.
         self.policy.set_target_return(config.target_return)
-        self._pending: Optional[tuple] = None
+        self._pending: tuple | None = None
         self._ret_std = 1.0  # running std of returns for reward normalization
 
         # Curriculum
@@ -368,7 +381,7 @@ class PPOTrainer:
             for i, s in enumerate(stages):
                 logger.info(f"  Stage {i}: {s.name} ({s.episodes} episodes, scenario={s.scenario})")
 
-    def get_current_scenario(self) -> Optional[str]:
+    def get_current_scenario(self) -> str | None:
         """Get the scenario for the current curriculum stage."""
         if self._curriculum and self._current_stage < len(self._curriculum):
             return self._curriculum[self._current_stage].scenario
@@ -450,7 +463,13 @@ class PPOTrainer:
         )
         return self.policy.transformer.action_head.to_gym_action(sampled)
 
-    def finish_step(self, reward: float, done: bool) -> None:
+    def finish_step(
+        self,
+        reward: float,
+        terminated: bool,
+        truncated: bool,
+        bootstrap_value: float | None = None,
+    ) -> None:
         """Commit the action selected by the last :meth:`select_action` call."""
         if self._pending is None:
             raise RuntimeError("finish_step called without a preceding select_action")
@@ -461,9 +480,19 @@ class PPOTrainer:
             reward=reward,
             value=value,
             log_prob=log_prob,
-            done=done,
+            terminated=terminated,
+            truncated=truncated,
+            bootstrap_value=bootstrap_value,
         ))
         self._pending = None
+
+    @torch.no_grad()
+    def estimate_value(self, obs_tensors: dict[str, torch.Tensor]) -> float:
+        """Estimate the final-state bootstrap value for a truncated episode."""
+        self.policy.state_encoder.eval()
+        self.value_head.eval()
+        obs_dev = {key: value.to(self.device) for key, value in obs_tensors.items()}
+        return float(self.value_head(self.policy.state_encoder(obs_dev)).item())
 
     @property
     def ready_to_update(self) -> bool:

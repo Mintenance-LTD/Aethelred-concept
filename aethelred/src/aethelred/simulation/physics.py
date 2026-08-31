@@ -25,7 +25,7 @@ class SimplePhysics:
         self.damage_per_hit = config.damage_per_hit
 
     def move_drone(
-        self, drone: DroneState, target_pos: Vec2, battlefield: "Battlefield"
+        self, drone: DroneState, target_pos: Vec2, battlefield: Battlefield
     ) -> DroneState:
         """Move a drone toward a target position."""
         if not drone.is_alive():
@@ -55,7 +55,7 @@ class SimplePhysics:
         return drone
 
     def move_threat(
-        self, threat: ThreatState, target_pos: Vec2, speed: float, battlefield: "Battlefield"
+        self, threat: ThreatState, target_pos: Vec2, speed: float, battlefield: Battlefield
     ) -> ThreatState:
         """Move a threat entity toward a target."""
         if not threat.is_active:
@@ -85,7 +85,7 @@ class SimplePhysics:
         target_pos: Vec2,
         attacker_range: float,
         target_velocity: Vec2,
-        battlefield: "Battlefield",
+        battlefield: Battlefield,
     ) -> float:
         """Compute probability of hitting a target."""
         dist = attacker_pos.distance_to(target_pos)
@@ -115,7 +115,7 @@ class SimplePhysics:
         target_pos: Vec2,
         attacker_range: float,
         target_velocity: Vec2,
-        battlefield: "Battlefield",
+        battlefield: Battlefield,
     ) -> tuple[float, bool]:
         """Resolve an attack. Returns (damage_dealt, is_destroyed)."""
         hit_prob = self.compute_hit_probability(

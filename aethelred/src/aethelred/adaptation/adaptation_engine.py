@@ -6,8 +6,8 @@ import copy
 from dataclasses import dataclass
 
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
+from torch import nn
 
 from aethelred.adaptation.ewc import EWCRegularizer
 from aethelred.adaptation.maml import MAMLAdapter
@@ -173,9 +173,9 @@ class AdaptationEngine:
     ) -> dict[str, torch.Tensor]:
         """Compute compressed delta between original and updated weights."""
         delta = {}
-        for name in original:
+        for name, original_weight in original.items():
             if name in updated:
-                diff = updated[name] - original[name]
+                diff = updated[name] - original_weight
                 mask = diff.abs() > threshold
                 if mask.any():
                     delta[name] = diff * mask.float()

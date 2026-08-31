@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Any, ClassVar
 
 import numpy as np
 
@@ -14,7 +14,7 @@ from aethelred.core.models import BattlefieldState
 class BattlefieldRenderer:
     """2D visualization of the battlefield."""
 
-    ROLE_COLORS = {
+    ROLE_COLORS: ClassVar[dict[DroneRole, str]] = {
         DroneRole.RECON: "#00BFFF",     # deep sky blue
         DroneRole.ENGAGE: "#FF4444",     # red
         DroneRole.EW: "#FFD700",         # gold
@@ -24,16 +24,16 @@ class BattlefieldRenderer:
 
     def __init__(self, config: RenderConfig) -> None:
         self.config = config
-        self._fig = None
-        self._ax = None
+        self._fig: Any = None
+        self._ax: Any = None
         self._initialized = False
 
     def render(
         self,
         state: BattlefieldState,
-        terrain: Optional[np.ndarray] = None,
+        terrain: np.ndarray | None = None,
         mode: str = "human",
-    ) -> Optional[np.ndarray]:
+    ) -> np.ndarray | None:
         """Render the current battlefield state."""
         import matplotlib
         if mode != "human":

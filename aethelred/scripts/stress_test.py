@@ -110,7 +110,7 @@ def run_scenario_test(
             swarm_coordinator=coordinator,
         )
 
-        obs, info = env.reset(seed=100 + episode)
+        _obs, info = env.reset(seed=100 + episode)
         policy.reset_history()
 
         state = env.get_current_state()
@@ -166,7 +166,7 @@ def run_scenario_test(
                     p.predicted_position for p in learning_loop.get_predictions(state)
                 ])
 
-            obs, reward, terminated, truncated, info = env.step(gym_action)
+            _obs, reward, terminated, truncated, info = env.step(gym_action)
             ep_reward += reward
 
             new_total = info["total_losses"]

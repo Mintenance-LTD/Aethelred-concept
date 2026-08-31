@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Iterator
+from collections.abc import Callable, Iterator
 
 import torch
-import torch.nn as nn
+from torch import nn
 
 from aethelred.config.settings import EWCConfig
 
@@ -31,7 +31,7 @@ class EWCRegularizer:
         task_name: str,
         model: nn.Module,
         data_iterator: Iterator[tuple[torch.Tensor, torch.Tensor]],
-        loss_fn: callable,
+        loss_fn: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
     ) -> None:
         """
         After model masters a task, compute and store Fisher Information.
@@ -84,7 +84,7 @@ class EWCRegularizer:
         self,
         model: nn.Module,
         data_iterator: Iterator[tuple[torch.Tensor, torch.Tensor]],
-        loss_fn: callable,
+        loss_fn: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
     ) -> dict[str, torch.Tensor]:
         """Compute diagonal Fisher Information Matrix via empirical estimate."""
         fisher: dict[str, torch.Tensor] = {}
@@ -121,7 +121,7 @@ class EWCRegularizer:
             count += 1
 
         # Average
-        for name in fisher:
-            fisher[name] = fisher[name] / max(count, 1)
+        for name, value in fisher.items():
+            fisher[name] = value / max(count, 1)
 
         return fisher

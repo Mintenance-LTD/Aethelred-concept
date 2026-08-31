@@ -153,8 +153,8 @@ class TacticalPolicy(TacticalAIInterface):
         self, gym_action: dict, state: BattlefieldState
     ) -> TacticalDecision:
         """Convert gym action dict back to a TacticalDecision."""
-        from aethelred.core.enums import TacticalActionType, FormationType
         from aethelred.core.actions import TacticalAction
+        from aethelred.core.enums import FormationType, TacticalActionType
         from aethelred.core.models import Vec2
 
         action_types = list(TacticalActionType)
@@ -198,7 +198,7 @@ class TacticalPolicy(TacticalAIInterface):
         encoder_config: StateEncoderConfig | None = None,
         transformer_config: DecisionTransformerConfig | None = None,
         device: str = "cpu",
-    ) -> "TacticalPolicy":
+    ) -> TacticalPolicy:
         """Factory method to build a fresh TacticalPolicy."""
         enc_cfg = encoder_config or StateEncoderConfig()
         tf_cfg = transformer_config or DecisionTransformerConfig()

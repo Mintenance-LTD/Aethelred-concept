@@ -2,15 +2,11 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field
 
 from aethelred.core.enums import EngagementOutcome, ThreatType
-
-if TYPE_CHECKING:
-    pass
 
 
 class EngagementEvent(BaseModel):
@@ -19,7 +15,7 @@ class EngagementEvent(BaseModel):
     timestep: int
     friendly_id: UUID
     threat_id: UUID
-    threat_type: Optional[ThreatType] = None
+    threat_type: ThreatType | None = None
     outcome: EngagementOutcome
     friendly_health_before: float
     friendly_health_after: float
@@ -39,9 +35,9 @@ class LossEvent(BaseModel):
     lost_unit_position_x: float
     lost_unit_position_y: float
     cause_of_loss: ThreatType
-    killing_threat_id: Optional[UUID] = None
-    killing_threat_position_x: Optional[float] = None
-    killing_threat_position_y: Optional[float] = None
+    killing_threat_id: UUID | None = None
+    killing_threat_position_x: float | None = None
+    killing_threat_position_y: float | None = None
     engagement_range: float = 0.0
     final_heading: float = 0.0
     final_velocity_x: float = 0.0

@@ -50,12 +50,37 @@ policy scored ≤ 1.4 and chose the *same* action on winnable and deadly states
   vanilla PPO with undirected entropy exploration cannot break out of the
   state-blind equilibrium.
 
+### Contrast demo (`tabular_q.py`): it's temporal credit assignment, not conditioning
+
+Running tabular Q-learning on the *identical* task (same env / reward / held-out
+seeds / global-action lever), with the state abstracted to the set of threat
+types present:
+
+| Method | Learned policy | Held-out reward |
+|---|---|---|
+| DT + PPO (10 configs) | state-blind constant | ≤ 1.4 |
+| Step-wise tabular Q (per-step action) | retreat *everywhere* | 13.5 (best constant) |
+| **Episode-posture bandit (one action/episode)** | **engage small-arms / retreat AA** | **20.2 = oracle** |
+
+The episode-level bandit learns the exact oracle policy with trivial tabular
+updates. The step-wise learner — like PPO — collapses to the safe constant.
+
 ### Conclusion
 
-For a tactical decision like this, the DT + single-step-PPO machinery is the wrong
-tool — it caps at constants. A lighter method with explicit per-state values and
-per-state exploration (e.g. tabular Q-learning / DQN) is expected to learn the
-conditional trivially.
+The **conditioning is trivially learnable** (the bandit hits the oracle, 20.2). The
+real difficulty is **temporal credit assignment**: engaging is a multi-step
+commitment whose payoff is delayed, so *per-step* value learners (PPO and step-wise
+Q alike) under-credit it and collapse to the immediately-safe action. The fix is
+not more PPO tuning — it is matching the control granularity / method to the
+decision (episode/posture-level actions, temporal abstraction / options, or an
+algorithm robust to delayed reward). For tactical posture decisions like this, the
+heavyweight per-step DT+PPO is the wrong tool.
+
+Reproduce the contrast:
+
+```bash
+python experiments/policy_authority/tabular_q.py experiments/policy_authority/config.yaml 150
+```
 
 ## Reproduce (run from the `aethelred/` directory)
 

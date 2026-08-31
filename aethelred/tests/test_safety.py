@@ -3,10 +3,19 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
-from aethelred.core.enums import DroneRole
+from aethelred.config.settings import AethelredConfig, ConfigurationError
+from aethelred.core.actions import TacticalAction, TacticalDecision
+from aethelred.core.enums import DroneRole, TacticalActionType
 from aethelred.core.models import BattlefieldState, DroneState, Vec2
-from aethelred.deployment.safety import GeofenceGuard, SafetyConfig, SensorNoiseInjector
+from aethelred.deployment.safety import (
+    GeofenceGuard,
+    SafetyConfig,
+    SafetyExecutionGateway,
+    SafetyManager,
+    SensorNoiseInjector,
+)
 
 
 def test_noise_injection_does_not_mutate_ground_truth():
@@ -30,3 +39,54 @@ def test_geofence_clamps_out_of_bounds():
     pos2, violated2 = guard.validate_position(Vec2(x=500.0, y=500.0))
     assert not violated2
     assert pos2.x == 500.0
+
+
+class _RecordingExecutor:
+    def __init__(self) -> None:
+        self.executed: TacticalDecision | None = None
+
+    def step_decision(
+        self, decision: TacticalDecision
+    ) -> tuple[dict[str, object], float, bool, bool, dict[str, object]]:
+        self.executed = decision
+        return {}, 0.0, False, False, {}
+
+
+def test_safety_gateway_executes_emergency_hold_not_raw_proposal():
+    drone = DroneState(role=DroneRole.ENGAGE, position=Vec2(x=100.0, y=100.0))
+    state = BattlefieldState(friendly_units=[drone])
+    proposal = TacticalDecision(
+        timestep=state.timestep,
+        actions=[
+            TacticalAction(
+                action_type=TacticalActionType.ENGAGE,
+                target_unit_id=drone.id,
+                target_position=Vec2(x=900.0, y=900.0),
+            )
+        ],
+    )
+    safety = SafetyManager(SafetyConfig())
+    safety.emergency_stop()
+    gateway = SafetyExecutionGateway(safety)
+    executor = _RecordingExecutor()
+
+    authorised = gateway.authorise(proposal, state)
+    gateway.execute(executor, authorised)
+
+    assert executor.executed is authorised.decision
+    assert executor.executed is not proposal
+    assert [action.action_type for action in executor.executed.actions] == [TacticalActionType.HOLD]
+
+
+def test_config_rejects_unknown_keys_and_conflicting_devices():
+    with pytest.raises(ConfigurationError, match="Unknown configuration key"):
+        AethelredConfig._from_dict({"simulaton": {}})
+
+    with pytest.raises(ConfigurationError, match="must match"):
+        AethelredConfig._from_dict({"device": "cpu", "training": {"device": "cuda"}})
+
+
+def test_root_device_is_propagated_to_trainer_device():
+    config = AethelredConfig._from_dict({"device": "cuda"})
+    assert config.device == "cuda"
+    assert config.training.device == "cuda"

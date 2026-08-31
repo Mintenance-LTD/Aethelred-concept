@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Optional
-
 from aethelred.core.actions import TacticalDecision
 from aethelred.core.events import LossEvent
 from aethelred.core.models import BattlefieldState
@@ -16,7 +14,7 @@ class RewardModel:
     and adaptation bonus.
     """
 
-    def __init__(self, weights: Optional[dict[str, float]] = None) -> None:
+    def __init__(self, weights: dict[str, float] | None = None) -> None:
         self.weights = weights or {
             "mission_progress": 1.0,
             "survival": 0.5,

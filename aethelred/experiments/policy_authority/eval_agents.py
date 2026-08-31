@@ -15,13 +15,13 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
-import torch  # noqa: E402
+import torch
 
-from aethelred.config.settings import AethelredConfig  # noqa: E402
-from aethelred.core.enums import EngagementOutcome, ThreatType  # noqa: E402
-from aethelred.simulation.environment import AethelredEnv  # noqa: E402
-from aethelred.tactical_ai.policy import TacticalPolicy  # noqa: E402
-from aethelred.utils.seeding import set_seed  # noqa: E402
+from aethelred.config.settings import AethelredConfig
+from aethelred.core.enums import EngagementOutcome, ThreatType
+from aethelred.simulation.environment import AethelredEnv
+from aethelred.tactical_ai.policy import TacticalPolicy
+from aethelred.utils.seeding import set_seed
 
 ACTION_NAMES = ["move", "engage", "evade", "formation_change", "recon", "relay", "retreat", "hold"]
 IDX = {n: i for i, n in enumerate(ACTION_NAMES)}

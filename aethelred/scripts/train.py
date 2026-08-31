@@ -32,8 +32,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 from aethelred.adaptation.adaptation_engine import AdaptationEngine
 from aethelred.adaptation.opponent_model import OpponentBehaviorModel
 from aethelred.config.settings import AethelredConfig
-from aethelred.core.models import Vec2
-from aethelred.deployment.safety import SafetyConfig, SafetyManager
+from aethelred.deployment.safety import SafetyConfig, SafetyExecutionGateway, SafetyManager
 from aethelred.learning.learning_loop import LearningLoop
 from aethelred.learning.trainer import CurriculumStage, PPOTrainer
 from aethelred.simulation.environment import AethelredEnv
@@ -145,6 +144,7 @@ def train(
         battlefield_width=config.simulation.battlefield.width,
         battlefield_height=config.simulation.battlefield.height,
     )
+    safety_gateway = SafetyExecutionGateway(safety)
 
     # Set up curriculum if applicable
     if mode == "curriculum":
@@ -189,7 +189,7 @@ def train(
         env = AethelredEnv(config=config.simulation, render_mode=render_mode)
 
         # Reset (fixed scenario if requested, else a fresh seed per episode)
-        obs, info = env.reset(seed=fixed_seed if fixed_seed is not None else 42 + episode)
+        _obs, info = env.reset(seed=fixed_seed if fixed_seed is not None else 42 + episode)
         policy.reset_history()
 
         episode_reward = 0.0
@@ -197,9 +197,6 @@ def train(
         episode_adaptations_start = learning_loop._total_adaptations
         prev_total_losses = 0
         prev_engagements = 0
-        bf_w = config.simulation.battlefield.width
-        bf_h = config.simulation.battlefield.height
-
         for step in range(config.simulation.max_steps):
             clean_state = env.get_current_state()
             if clean_state is None:
@@ -217,14 +214,11 @@ def train(
             # Trainer selects the action AND records the step for PPO
             gym_action = trainer.select_action(obs_tensors)
 
-            # Safety: geofence-clamp the commanded target (does NOT rewrite the
-            # high-level action type — the env decomposes it per role on step).
-            gx = float(gym_action["target_position"][0]) * bf_w
-            gy = float(gym_action["target_position"][1]) * bf_h
-            clamped, _ = safety.geofence.validate_position(Vec2(x=gx, y=gy))
-            gym_action["target_position"] = [clamped.x / bf_w, clamped.y / bf_h]
-            # Safety telemetry (watchdog / events / RTL state)
-            safety.post_decision(env._decode_action(gym_action), clean_state)
+            # Decode once, then execute only the decision authorised by safety.
+            # This prevents watchdog, RTL, emergency-stop, and action-validator
+            # corrections from being bypassed by a second Gym-action decode.
+            proposal = env._decode_action(gym_action)
+            authorised = safety_gateway.authorise(proposal, clean_state)
 
             # Phase 5 consumption: pre-position recon toward predicted threats
             if not no_adapt and learning_loop.config.enable_prediction:
@@ -232,12 +226,22 @@ def train(
                     p.predicted_position for p in learning_loop.get_predictions(clean_state)
                 ])
 
-            obs, reward, terminated, truncated, info = env.step(gym_action)
+            obs, reward, terminated, truncated, info = safety_gateway.execute(env, authorised)
             done = terminated or truncated
             episode_reward += reward
 
-            # Commit the step (reward now known) to the PPO rollout
-            trainer.finish_step(reward, done)
+            # Preserve Gymnasium's termination/truncation distinction. A time
+            # limit receives a value bootstrap from its final observation.
+            bootstrap_value = None
+            if truncated and not terminated:
+                next_obs_tensors = BattlefieldStateEncoder.obs_to_tensors(obs, trainer.device)
+                bootstrap_value = trainer.estimate_value(next_obs_tensors)
+            trainer.finish_step(
+                reward,
+                terminated=terminated,
+                truncated=truncated,
+                bootstrap_value=bootstrap_value,
+            )
 
             # Track losses (for logging)
             new_total = info["total_losses"]
@@ -304,8 +308,7 @@ def train(
                 optimizer=trainer.optimizer,
             )
 
-        if survival_rate > best_survival:
-            best_survival = survival_rate
+        best_survival = max(best_survival, survival_rate)
 
         # Periodic checkpoint
         if episode % 25 == 0 and episode > 0:
