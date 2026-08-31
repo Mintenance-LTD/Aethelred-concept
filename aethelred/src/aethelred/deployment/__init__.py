@@ -9,6 +9,7 @@ from aethelred.deployment.promotion import (
     PromotionError,
     PromotionPolicy,
 )
+from aethelred.deployment.release_ledger import ReleaseLedger, ReleaseRegistration, RollbackRecord
 
 __all__ = [
     "ApprovedModelRelease",
@@ -18,4 +19,7 @@ __all__ = [
     "ModelPromotionGate",
     "PromotionError",
     "PromotionPolicy",
+    "ReleaseLedger",
+    "ReleaseRegistration",
+    "RollbackRecord",
 ]

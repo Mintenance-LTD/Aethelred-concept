@@ -105,6 +105,13 @@ baseline on required metrics, recorded passing safety checks, a matching model
 manifest/report hash, and a named human approval. It creates an approval record
 only—it does not load a model or dispatch any command.
 
+`ReleaseLedger` records approved release registration, activation, and rollback
+events to the durable JSONL audit journal. A rollback can target only a
+previously approved release and requires a named operator plus rationale; it
+updates release governance state only, never an active runtime model.
+On startup the ledger replays and validates the journal, restoring the active
+release and failing closed if release identifiers or lifecycle history conflict.
+
 ## Status / recent fixes
 
 The training and adaptation pipelines were previously non-functional. Fixed:
