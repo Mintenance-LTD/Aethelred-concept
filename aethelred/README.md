@@ -142,6 +142,10 @@ intent issuers. A valid HMAC alone is insufficient: a signed proposal from an
 issuer outside the mission allowlist is journalled and rejected before safety
 authorisation or execution.
 
+`OperationalControlLoop.submit` rejects raw policy proposals. Production callers
+must use `AuthenticatedOperationalControlLoop`, which verifies the signed envelope
+and issuer binding before the loop records a safety decision or reaches an adapter.
+
 `ActiveReleaseVerifier` is the runtime artefact boundary: it requires an active
 ledger registration and compares the exact model digest, filename, code revision,
 canonical runtime configuration, observation schema, and runtime target before it

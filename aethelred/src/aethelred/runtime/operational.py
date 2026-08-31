@@ -338,7 +338,12 @@ class CommandArbiter:
 
 
 class OperationalControlLoop:
-    """Records proposal-to-command provenance through the operational boundary."""
+    """Records only verified proposal-to-command provenance.
+
+    Raw policy proposals are deliberately rejected by the public method. The
+    authenticated wrapper below is the production entry point and invokes the
+    internal verified path only after it validates the signed envelope.
+    """
 
     def __init__(
         self,
@@ -350,6 +355,23 @@ class OperationalControlLoop:
         self._arbiter = CommandArbiter(journal)
 
     def submit(
+        self,
+        proposal: IntentProposal,
+        state: WorldState,
+        mission: Mission,
+        executor: AuthorisedCommandExecutor,
+        now: datetime | None = None,
+    ) -> CommandReceipt:
+        """Reject raw proposals; use :class:`AuthenticatedOperationalControlLoop`."""
+        del state, mission, executor, now
+        self._journal.record(
+            "unauthenticated_intent_rejected",
+            correlation_id=str(proposal.proposal_id),
+            payload={"policy_id": proposal.policy_id, "reason": "authenticated_envelope_required"},
+        )
+        raise PermissionError("Operational intents require an authenticated envelope")
+
+    def _submit_verified(
         self,
         proposal: IntentProposal,
         state: WorldState,
@@ -427,4 +449,4 @@ class AuthenticatedOperationalControlLoop:
             correlation_id=str(proposal.proposal_id),
             payload={"issuer_id": envelope.issuer_id, "nonce": envelope.nonce},
         )
-        return self._control_loop.submit(proposal, state, mission, executor, now)
+        return self._control_loop._submit_verified(proposal, state, mission, executor, now)

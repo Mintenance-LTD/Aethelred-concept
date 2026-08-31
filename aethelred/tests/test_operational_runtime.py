@@ -186,18 +186,16 @@ def test_expired_command_and_mismatched_receipt_fail_closed(tmp_path):
         CommandArbiter(journal).execute(_RecordingAdapter(), fresh_result, now)
 
 
-def test_control_loop_records_proposal_safety_and_command(tmp_path):
+def test_raw_control_loop_rejects_unauthenticated_proposal(tmp_path):
     mission, state, proposal, now = _runtime_inputs()
     journal = JsonlAuditJournal(tmp_path / "audit.jsonl")
     loop = OperationalControlLoop(OperationalSafetySupervisor(), journal)
 
-    loop.submit(proposal, state, mission, _RecordingAdapter(), now)
+    with pytest.raises(PermissionError, match="authenticated envelope"):
+        loop.submit(proposal, state, mission, _RecordingAdapter(), now)
 
     assert [event["event_type"] for event in journal.read_all()] == [
-        "intent_proposed",
-        "safety_decision",
-        "command_execution_started",
-        "command_executed",
+        "unauthenticated_intent_rejected",
     ]
 
 
