@@ -67,6 +67,7 @@ def _runtime_inputs() -> tuple[Mission, WorldState, IntentProposal, datetime]:
         allowed_capabilities=frozenset({MissionCapability.SURVEY, MissionCapability.HOLD}),
         assigned_vehicle_ids=frozenset({"vehicle-1"}),
         operating_area=OperatingArea(minimum=Vec2(x=0.0, y=0.0), maximum=Vec2(x=500.0, y=500.0)),
+        authorised_issuer_ids=frozenset({"planner-service"}),
     )
     state = WorldState(
         revision=4,

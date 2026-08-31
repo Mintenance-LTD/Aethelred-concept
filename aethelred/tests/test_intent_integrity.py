@@ -58,6 +58,25 @@ def test_tampered_or_replayed_intent_cannot_reach_adapter(tmp_path) -> None:
     assert adapter.command_id is not None
 
 
+def test_signed_but_unapproved_issuer_cannot_reach_adapter(tmp_path) -> None:
+    mission, state, proposal, now = _runtime_inputs()
+    journal = JsonlAuditJournal(tmp_path / "audit.jsonl")
+    authenticator = IntentAuthenticator(b"a" * 32)
+    envelope = authenticator.sign(proposal, "other-planner-service", issued_at=now)
+    loop = AuthenticatedOperationalControlLoop(
+        OperationalControlLoop(OperationalSafetySupervisor(), journal), authenticator
+    )
+    adapter = _RecordingAdapter()
+
+    with pytest.raises(IntegrityError, match="not authorised"):
+        loop.submit(envelope, state, mission, adapter, now)
+
+    assert adapter.command_id is None
+    assert [event["event_type"] for event in journal.read_all()] == [
+        "intent_authentication_rejected"
+    ]
+
+
 def test_expired_intent_is_rejected_before_command_authorisation(tmp_path) -> None:
     mission, state, proposal, now = _runtime_inputs()
     authenticator = IntentAuthenticator(b"a" * 32, max_age=timedelta(seconds=1))

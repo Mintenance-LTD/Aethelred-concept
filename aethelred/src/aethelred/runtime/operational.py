@@ -73,6 +73,11 @@ class Mission:
     allowed_capabilities: frozenset[MissionCapability]
     assigned_vehicle_ids: frozenset[str]
     operating_area: OperatingArea
+    authorised_issuer_ids: frozenset[str]
+
+    def __post_init__(self) -> None:
+        if not self.authorised_issuer_ids or any(not issuer.strip() for issuer in self.authorised_issuer_ids):
+            raise ValueError("Mission must declare at least one non-empty authorised issuer")
 
 
 @dataclass(frozen=True)
@@ -399,13 +404,24 @@ class AuthenticatedOperationalControlLoop:
 
         Imports are deferred to avoid a runtime-contract import cycle.
         """
-        from aethelred.runtime.integrity import AuthenticatedIntent, IntentAuthenticator
+        from aethelred.runtime.integrity import (
+            AuthenticatedIntent,
+            IntegrityError,
+            IntentAuthenticator,
+        )
 
         if not isinstance(self._authenticator, IntentAuthenticator):
             raise TypeError("Authenticated loop requires an IntentAuthenticator")
         if not isinstance(envelope, AuthenticatedIntent):
             raise TypeError("Authenticated loop requires an AuthenticatedIntent")
         proposal = self._authenticator.verify(envelope, now)
+        if envelope.issuer_id not in mission.authorised_issuer_ids:
+            self._control_loop._journal.record(
+                "intent_authentication_rejected",
+                correlation_id=str(proposal.proposal_id),
+                payload={"issuer_id": envelope.issuer_id, "reason": "issuer_not_authorised_for_mission"},
+            )
+            raise IntegrityError("Intent issuer is not authorised for this mission")
         self._control_loop._journal.record(
             "intent_authenticated",
             correlation_id=str(proposal.proposal_id),

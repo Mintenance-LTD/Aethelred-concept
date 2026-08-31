@@ -137,6 +137,11 @@ Each `Mission` also carries finite, closed `OperatingArea` bounds. The runtime
 authoriser rejects a proposal when its current vehicle position or requested
 target lies outside that approved area, independently of simulator geofencing.
 
+For the authenticated operational loop, each mission also names its authorised
+intent issuers. A valid HMAC alone is insufficient: a signed proposal from an
+issuer outside the mission allowlist is journalled and rejected before safety
+authorisation or execution.
+
 `ActiveReleaseVerifier` is the runtime artefact boundary: it requires an active
 ledger registration and compares the exact model digest, filename, code revision,
 canonical runtime configuration, observation schema, and runtime target before it
