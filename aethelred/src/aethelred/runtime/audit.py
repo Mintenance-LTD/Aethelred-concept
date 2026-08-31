@@ -6,6 +6,7 @@ import json
 import os
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
+from hashlib import sha256
 from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
@@ -20,6 +21,12 @@ class AuditEvent:
     event_type: str
     correlation_id: str
     payload: dict[str, Any]
+    previous_hash: str | None
+    event_hash: str
+
+
+class AuditIntegrityError(ValueError):
+    """Raised when a journal record is malformed, altered, or out of sequence."""
 
 
 class JsonlAuditJournal:
@@ -35,15 +42,29 @@ class JsonlAuditJournal:
         payload: dict[str, Any],
     ) -> AuditEvent:
         """Persist one event and fsync it before acknowledging the write."""
+        existing_events = self.read_all()
+        previous_hash = existing_events[-1]["event_hash"] if existing_events else None
+        event_id = uuid4()
+        occurred_at = datetime.now(UTC)
+        unsigned_event: dict[str, Any] = {
+            "event_id": event_id,
+            "occurred_at": occurred_at,
+            "event_type": event_type,
+            "correlation_id": correlation_id,
+            "payload": payload,
+            "previous_hash": previous_hash,
+        }
         event = AuditEvent(
-            event_id=uuid4(),
-            occurred_at=datetime.now(UTC),
+            event_id=event_id,
+            occurred_at=occurred_at,
             event_type=event_type,
             correlation_id=correlation_id,
             payload=payload,
+            previous_hash=previous_hash,
+            event_hash=self._hash_event(unsigned_event),
         )
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        encoded = json.dumps(asdict(event), default=self._json_default, sort_keys=True)
+        encoded = self._canonical_json(asdict(event))
         with self.path.open("a", encoding="utf-8", newline="\n") as handle:
             handle.write(f"{encoded}\n")
             handle.flush()
@@ -51,11 +72,40 @@ class JsonlAuditJournal:
         return event
 
     def read_all(self) -> list[dict[str, Any]]:
-        """Return recorded events in order, rejecting corrupt journal lines."""
+        """Return verified events in order, rejecting corruption or tampering."""
         if not self.path.exists():
             return []
+        events: list[dict[str, Any]] = []
+        previous_hash: str | None = None
         with self.path.open(encoding="utf-8") as handle:
-            return [json.loads(line) for line in handle if line.strip()]
+            for line_number, line in enumerate(handle, start=1):
+                if not line.strip():
+                    continue
+                try:
+                    event = json.loads(line)
+                    if not isinstance(event, dict):
+                        raise TypeError("event is not a mapping")
+                    event_hash = event.pop("event_hash")
+                    stored_previous_hash = event.get("previous_hash")
+                    if stored_previous_hash != previous_hash:
+                        raise AuditIntegrityError("previous hash does not match journal sequence")
+                    calculated_hash = self._hash_event(event)
+                    if event_hash != calculated_hash:
+                        raise AuditIntegrityError("event hash does not match event content")
+                    event["event_hash"] = event_hash
+                except (json.JSONDecodeError, KeyError, TypeError, AuditIntegrityError) as error:
+                    raise AuditIntegrityError(f"Invalid audit event at line {line_number}") from error
+                events.append(event)
+                previous_hash = event_hash
+        return events
+
+    @classmethod
+    def _hash_event(cls, unsigned_event: dict[str, Any]) -> str:
+        return sha256(cls._canonical_json(unsigned_event).encode("utf-8")).hexdigest()
+
+    @classmethod
+    def _canonical_json(cls, value: dict[str, Any]) -> str:
+        return json.dumps(value, default=cls._json_default, sort_keys=True, separators=(",", ":"))
 
     @staticmethod
     def _json_default(value: Any) -> str:

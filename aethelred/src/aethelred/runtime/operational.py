@@ -262,3 +262,37 @@ class OperationalControlLoop:
             },
         )
         return self._arbiter.execute(executor, result)
+
+
+class AuthenticatedOperationalControlLoop:
+    """Production-facing loop that requires verified intent integrity first."""
+
+    def __init__(self, control_loop: OperationalControlLoop, authenticator: object) -> None:
+        self._control_loop = control_loop
+        self._authenticator = authenticator
+
+    def submit(
+        self,
+        envelope: object,
+        state: WorldState,
+        mission: Mission,
+        executor: AuthorisedCommandExecutor,
+        now: datetime | None = None,
+    ) -> CommandReceipt:
+        """Verify authenticated intent before entering safety authorisation.
+
+        Imports are deferred to avoid a runtime-contract import cycle.
+        """
+        from aethelred.runtime.integrity import AuthenticatedIntent, IntentAuthenticator
+
+        if not isinstance(self._authenticator, IntentAuthenticator):
+            raise TypeError("Authenticated loop requires an IntentAuthenticator")
+        if not isinstance(envelope, AuthenticatedIntent):
+            raise TypeError("Authenticated loop requires an AuthenticatedIntent")
+        proposal = self._authenticator.verify(envelope, now)
+        self._control_loop._journal.record(
+            "intent_authenticated",
+            correlation_id=str(proposal.proposal_id),
+            payload={"issuer_id": envelope.issuer_id, "nonce": envelope.nonce},
+        )
+        return self._control_loop.submit(proposal, state, mission, executor, now)

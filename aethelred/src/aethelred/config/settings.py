@@ -183,6 +183,7 @@ class LearningLoopConfig:
 class AethelredConfig:
     """Root configuration."""
 
+    schema_version: int = 1
     project_name: str = "aethelred"
     simulation: SimulationConfig = field(default_factory=SimulationConfig)
     tactical_ai: DecisionTransformerConfig = field(default_factory=DecisionTransformerConfig)
@@ -201,6 +202,8 @@ class AethelredConfig:
             data = yaml.safe_load(f) or {}
         if not isinstance(data, dict):
             raise ConfigurationError("Configuration root must be a mapping")
+        if "schema_version" not in data:
+            raise ConfigurationError("Configuration must declare schema_version")
         return cls._from_dict(data)
 
     @classmethod
@@ -249,18 +252,58 @@ class AethelredConfig:
     @staticmethod
     def _validate(config: AethelredConfig) -> None:
         """Validate safety-critical and simulation invariants before execution."""
-        if config.simulation.battlefield.width <= 0 or config.simulation.battlefield.height <= 0:
-            raise ConfigurationError("battlefield width and height must be positive")
-        if config.simulation.battlefield.grid_resolution <= 0:
-            raise ConfigurationError("battlefield grid_resolution must be positive")
-        if config.simulation.physics.dt <= 0:
-            raise ConfigurationError("physics dt must be positive")
-        if config.simulation.max_steps <= 0:
-            raise ConfigurationError("simulation max_steps must be positive")
-        if config.training.update_interval <= 0 or config.training.batch_size <= 0:
-            raise ConfigurationError("training update_interval and batch_size must be positive")
-        if config.training.learning_rate <= 0:
-            raise ConfigurationError("training learning_rate must be positive")
+        def require_positive(value: float, name: str) -> None:
+            if not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(value) or value <= 0:
+                raise ConfigurationError(f"{name} must be a positive finite number")
+
+        def require_unit_interval(value: float, name: str) -> None:
+            if not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(value) or not 0 <= value <= 1:
+                raise ConfigurationError(f"{name} must be between 0 and 1")
+
+        if type(config.schema_version) is not int or config.schema_version != 1:
+            raise ConfigurationError("Unsupported configuration schema_version")
+        for value, name in (
+            (config.simulation.battlefield.width, "battlefield width"),
+            (config.simulation.battlefield.height, "battlefield height"),
+            (config.simulation.battlefield.grid_resolution, "battlefield grid_resolution"),
+            (config.simulation.physics.dt, "physics dt"),
+            (config.simulation.max_steps, "simulation max_steps"),
+            (config.simulation.threats.max_threats, "threat max_threats"),
+            (config.simulation.threats.spawn_interval, "threat spawn_interval"),
+            (config.simulation.render.width_px, "render width_px"),
+            (config.simulation.render.height_px, "render height_px"),
+            (config.simulation.render.fps, "render fps"),
+            (config.tactical_ai.hidden_dim, "tactical hidden_dim"),
+            (config.tactical_ai.num_heads, "tactical num_heads"),
+            (config.tactical_ai.num_layers, "tactical num_layers"),
+            (config.tactical_ai.context_length, "tactical context_length"),
+            (config.training.update_interval, "training update_interval"),
+            (config.training.batch_size, "training batch_size"),
+            (config.training.learning_rate, "training learning_rate"),
+            (config.training.gradient_clip, "training gradient_clip"),
+            (config.adaptation.replay_buffer_capacity, "adaptation replay_buffer_capacity"),
+            (config.learning_loop.loss_threshold, "learning loss_threshold"),
+            (config.learning_loop.adaptation_interval, "learning adaptation_interval"),
+        ):
+            require_positive(value, name)
+        for value, name in (
+            (config.simulation.physics.hit_probability_base, "physics hit_probability_base"),
+            (config.simulation.physics.cover_damage_reduction, "physics cover_damage_reduction"),
+            (config.training.gamma, "training gamma"),
+            (config.training.gae_lambda, "training gae_lambda"),
+            (config.adaptation.replay_alpha, "adaptation replay_alpha"),
+        ):
+            require_unit_interval(value, name)
+        if config.simulation.threats.initial_threats < 0 or config.simulation.threats.initial_threats > config.simulation.threats.max_threats:
+            raise ConfigurationError("threat initial_threats must be between 0 and max_threats")
+        if config.tactical_ai.hidden_dim % config.tactical_ai.num_heads != 0:
+            raise ConfigurationError("tactical hidden_dim must be divisible by num_heads")
+        if not 0 <= config.tactical_ai.dropout < 1:
+            raise ConfigurationError("tactical dropout must be at least 0 and less than 1")
+        if config.tactical_ai.state_embed_dim != config.state_encoder.state_embed_dim:
+            raise ConfigurationError("tactical and state_encoder state_embed_dim must match")
+        if config.training.ppo_clip_ratio <= 0 or config.training.entropy_coef < 0 or config.training.value_coef < 0:
+            raise ConfigurationError("training PPO coefficients must be non-negative and clip ratio positive")
         if any(count < 0 for count in (
             config.simulation.swarm.num_recon,
             config.simulation.swarm.num_engage,

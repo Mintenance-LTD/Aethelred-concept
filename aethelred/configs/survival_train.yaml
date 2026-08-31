@@ -1,6 +1,7 @@
 # Survival-focused training config (demonstrates PPO improving survival).
 # Reproduce: python scripts/train.py --config configs/survival_train.yaml --episodes 120 --no-noise --seed 5
 # On seed 5 this took the policy from ~50% to ~71% survival (deterministic eval).
+schema_version: 1
 device: cpu
 checkpoint_dir: checkpoints/survival_demo
 simulation:

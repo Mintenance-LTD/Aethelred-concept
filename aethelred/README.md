@@ -91,6 +91,12 @@ only its `AuthorisedCommand` can pass through `CommandArbiter` to an adapter.
 decision-only execution path and maps every allowed operational capability to a
 non-offensive simulator action.
 
+For a production-facing entry point, `AuthenticatedOperationalControlLoop`
+requires an `AuthenticatedIntent` validated by `IntentAuthenticator` before the
+proposal reaches the safety supervisor. The envelope is HMAC-authenticated,
+short-lived, and replay-resistant; it is still only an intent and never bypasses
+mission or safety authorisation.
+
 ## Offline adaptation boundary
 
 `LearningLoop` may derive an `OfflineAdaptationCandidate` from simulated loss
@@ -105,12 +111,21 @@ baseline on required metrics, recorded passing safety checks, a matching model
 manifest/report hash, and a named human approval. It creates an approval record
 only—it does not load a model or dispatch any command.
 
+`HeldOutEvaluator` runs the same declared scenario set for a candidate and its
+baseline, aggregates comparable metrics and safety outcomes, and writes a
+canonical evaluation report. The report's SHA-256 is calculated from its exact
+persisted bytes and is therefore directly usable by `ModelManifest` and the
+promotion gate.
+
 `ReleaseLedger` records approved release registration, activation, and rollback
 events to the durable JSONL audit journal. A rollback can target only a
 previously approved release and requires a named operator plus rationale; it
 updates release governance state only, never an active runtime model.
 On startup the ledger replays and validates the journal, restoring the active
 release and failing closed if release identifiers or lifecycle history conflict.
+Every audit event is hash-chained to its predecessor, so replay also fails
+closed when a persisted event is altered, deleted from the middle of the log, or
+otherwise breaks the recorded sequence.
 
 ## Status / recent fixes
 
