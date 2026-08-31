@@ -9,6 +9,7 @@ import pytest
 
 from aethelred.runtime.audit import JsonlAuditJournal
 from aethelred.runtime.integrity import IntegrityError, IntentAuthenticator
+from aethelred.runtime.lifecycle import RuntimeLifecycleSupervisor
 from aethelred.runtime.missions import MissionRegistry
 from aethelred.runtime.operational import (
     AuthenticatedOperationalControlLoop,
@@ -18,11 +19,23 @@ from aethelred.runtime.operational import (
 from tests.test_operational_runtime import _RecordingAdapter, _runtime_inputs
 
 
+def _active_lifecycle(journal, mission):
+    lifecycle = RuntimeLifecycleSupervisor(journal)
+    lifecycle.complete_self_test(("integrity", "safety"))
+    lifecycle.load_mission(mission)
+    lifecycle.arm("operator@example.test")
+    lifecycle.activate()
+    return lifecycle
+
+
 def _authenticated_loop(journal, authenticator, mission):
     registry = MissionRegistry(journal)
     registry.register(mission, "operator@example.test", "Approved non-offensive mission")
     return AuthenticatedOperationalControlLoop(
-        OperationalControlLoop(OperationalSafetySupervisor(), journal), authenticator, registry
+        OperationalControlLoop(OperationalSafetySupervisor(), journal),
+        authenticator,
+        registry,
+        _active_lifecycle(journal, mission),
     )
 
 
@@ -39,6 +52,10 @@ def test_authenticated_intent_is_verified_before_safety_and_execution(tmp_path) 
     assert adapter.command_id is not None
     assert [event["event_type"] for event in journal.read_all()] == [
         "mission_registered",
+        "runtime_lifecycle_transition",
+        "runtime_lifecycle_transition",
+        "runtime_lifecycle_transition",
+        "runtime_lifecycle_transition",
         "intent_nonce_consumed",
         "intent_authenticated",
         "telemetry_observed",
@@ -78,10 +95,9 @@ def test_signed_but_unapproved_issuer_cannot_reach_adapter(tmp_path) -> None:
         loop.submit(envelope, state, mission, adapter, now)
 
     assert adapter.command_id is None
-    assert [event["event_type"] for event in journal.read_all()] == [
-        "mission_registered",
+    assert [event["event_type"] for event in journal.read_all()][-2:] == [
         "intent_nonce_consumed",
-        "intent_authentication_rejected"
+        "intent_authentication_rejected",
     ]
 
 
@@ -105,14 +121,13 @@ def test_unregistered_mission_cannot_reach_authentication_or_adapter(tmp_path) -
         OperationalControlLoop(OperationalSafetySupervisor(), journal),
         authenticator,
         MissionRegistry(journal),
+        _active_lifecycle(journal, mission),
     )
 
     with pytest.raises(PermissionError, match="not currently registered"):
         loop.submit(envelope, state, mission, _RecordingAdapter(), now)
 
-    assert [event["event_type"] for event in journal.read_all()] == [
-        "mission_authorisation_rejected"
-    ]
+    assert journal.read_all()[-1]["event_type"] == "mission_authorisation_rejected"
 
 
 def test_nonce_replay_is_rejected_after_authenticator_restart(tmp_path) -> None:
@@ -126,10 +141,16 @@ def test_nonce_replay_is_rejected_after_authenticator_restart(tmp_path) -> None:
 
     restarted_journal = JsonlAuditJournal(tmp_path / "audit.jsonl")
     restarted = IntentAuthenticator(b"a" * 32, restarted_journal)
+    lifecycle = RuntimeLifecycleSupervisor(restarted_journal)
+    lifecycle.reset_to_standby("operator@example.test", "Restart recovery reviewed")
+    lifecycle.load_mission(mission)
+    lifecycle.arm("operator@example.test")
+    lifecycle.activate()
     loop = AuthenticatedOperationalControlLoop(
         OperationalControlLoop(OperationalSafetySupervisor(), restarted_journal),
         restarted,
         MissionRegistry(restarted_journal),
+        lifecycle,
     )
     with pytest.raises(IntegrityError, match="already been used"):
         loop.submit(envelope, state, mission, _RecordingAdapter(), now)
@@ -143,7 +164,10 @@ def test_authenticated_loop_rejects_an_authenticator_on_another_journal(tmp_path
     registry = MissionRegistry(journal)
     registry.register(mission, "operator@example.test", "Approved non-offensive mission")
     loop = AuthenticatedOperationalControlLoop(
-        OperationalControlLoop(OperationalSafetySupervisor(), journal), authenticator, registry
+        OperationalControlLoop(OperationalSafetySupervisor(), journal),
+        authenticator,
+        registry,
+        _active_lifecycle(journal, mission),
     )
 
     with pytest.raises(TypeError, match="share one audit journal"):

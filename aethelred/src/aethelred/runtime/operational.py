@@ -472,10 +472,12 @@ class AuthenticatedOperationalControlLoop:
         control_loop: OperationalControlLoop,
         authenticator: object,
         mission_registry: object,
+        lifecycle: object,
     ) -> None:
         self._control_loop = control_loop
         self._authenticator = authenticator
         self._mission_registry = mission_registry
+        self._lifecycle = lifecycle
 
     def submit(
         self,
@@ -494,6 +496,7 @@ class AuthenticatedOperationalControlLoop:
             IntegrityError,
             IntentAuthenticator,
         )
+        from aethelred.runtime.lifecycle import RuntimeLifecycleError, RuntimeLifecycleSupervisor
         from aethelred.runtime.missions import MissionRegistry, MissionRegistryError
 
         if not isinstance(self._authenticator, IntentAuthenticator):
@@ -502,6 +505,8 @@ class AuthenticatedOperationalControlLoop:
             raise TypeError("Authenticated loop requires an AuthenticatedIntent")
         if not isinstance(self._mission_registry, MissionRegistry):
             raise TypeError("Authenticated loop requires a MissionRegistry")
+        if not isinstance(self._lifecycle, RuntimeLifecycleSupervisor):
+            raise TypeError("Authenticated loop requires a RuntimeLifecycleSupervisor")
         if self._authenticator.journal is not self._control_loop._journal:
             raise TypeError("Intent authenticator and control loop must share one audit journal")
         try:
@@ -513,6 +518,15 @@ class AuthenticatedOperationalControlLoop:
                 payload={"reason": str(error)},
             )
             raise PermissionError("Intent mission is not currently registered") from error
+        try:
+            self._lifecycle.require_active(registered_mission)
+        except RuntimeLifecycleError as error:
+            self._control_loop._journal.record(
+                "runtime_lifecycle_rejected",
+                correlation_id=str(registered_mission.mission_id),
+                payload={"reason": str(error), "state": self._lifecycle.state.value},
+            )
+            raise PermissionError("Runtime lifecycle does not permit command submission") from error
         proposal = self._authenticator.verify(envelope, now)
         if envelope.issuer_id not in registered_mission.authorised_issuer_ids:
             self._control_loop._journal.record(

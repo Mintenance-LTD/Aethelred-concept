@@ -2,6 +2,11 @@
 
 from aethelred.runtime.audit import AuditEvent, AuditIntegrityError, JsonlAuditJournal
 from aethelred.runtime.integrity import AuthenticatedIntent, IntegrityError, IntentAuthenticator
+from aethelred.runtime.lifecycle import (
+    RuntimeLifecycleError,
+    RuntimeLifecycleState,
+    RuntimeLifecycleSupervisor,
+)
 from aethelred.runtime.missions import MissionRegistration, MissionRegistry, MissionRegistryError
 from aethelred.runtime.operational import (
     AuthenticatedOperationalControlLoop,
@@ -42,6 +47,9 @@ __all__ = [
     "OperatingArea",
     "OperationalControlLoop",
     "OperationalSafetySupervisor",
+    "RuntimeLifecycleError",
+    "RuntimeLifecycleState",
+    "RuntimeLifecycleSupervisor",
     "SimulatorCommandAdapter",
     "WorldState",
 ]
