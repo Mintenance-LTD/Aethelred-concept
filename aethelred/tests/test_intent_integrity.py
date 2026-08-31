@@ -396,3 +396,60 @@ def test_missing_runtime_health_evidence_cannot_reach_the_adapter(tmp_path) -> N
     assert adapter.command_id is None
     assert lifecycle.state is RuntimeLifecycleState.DEGRADED
     assert journal.read_all()[-1]["payload"]["event"] == "runtime_degraded"
+
+
+@pytest.mark.parametrize(
+    ("fault", "state_changes", "report_healthy", "issued_at_offset", "error_type"),
+    [
+        ("policy process", {}, False, timedelta(), PermissionError),
+        ("expired planner message", {}, True, timedelta(seconds=-2), IntegrityError),
+        ("stale sensor", {"sensor_observed_at": "stale"}, True, timedelta(), PermissionError),
+        ("lost operator link", {"communications_healthy": False}, True, timedelta(), PermissionError),
+        ("navigation invalid", {"navigation_valid": False}, True, timedelta(), PermissionError),
+        ("energy reserve low", {"battery_reserve": 0.19}, True, timedelta(), PermissionError),
+        ("corrupt localisation", {"localisation_quality": float("nan")}, True, timedelta(), PermissionError),
+    ],
+)
+def test_fault_injection_never_reaches_the_vehicle_adapter(
+    tmp_path,
+    fault,
+    state_changes,
+    report_healthy,
+    issued_at_offset,
+    error_type,
+) -> None:
+    mission, state, proposal, now = _runtime_inputs()
+    if state_changes.get("sensor_observed_at") == "stale":
+        state_changes = {**state_changes, "sensor_observed_at": now - timedelta(seconds=2)}
+    faulted_state = replace(state, **state_changes)
+    journal = JsonlAuditJournal(tmp_path / "audit.jsonl")
+    authenticator = IntentAuthenticator(b"a" * 32, journal, max_age=timedelta(seconds=1))
+    envelope = authenticator.sign(
+        proposal,
+        "planner-service",
+        issued_at=now + issued_at_offset,
+        nonce=f"fault-{fault}",
+    )
+    registry = MissionRegistry(journal)
+    registry.register(mission, "operator@example.test", "Approved non-offensive mission")
+    lifecycle = _active_lifecycle(journal, mission)
+    configuration_registry = _active_configuration(journal)
+    health = RuntimeHealthSupervisor(journal, lifecycle, ("policy-process",))
+    health.report(RuntimeHealthReport("policy-process", report_healthy, now, fault))
+    adapter = _RecordingAdapter()
+    loop = AuthenticatedOperationalControlLoop(
+        OperationalControlLoop(
+            OperationalSafetySupervisor(), journal, _runtime_identity(configuration_registry.active().sha256)
+        ),
+        authenticator,
+        registry,
+        lifecycle,
+        configuration_registry,
+        health,
+    )
+
+    with pytest.raises(error_type):
+        loop.submit(envelope, faulted_state, mission, adapter, now)
+
+    assert adapter.command_id is None
+    assert "command_execution_started" not in [event["event_type"] for event in journal.read_all()]
