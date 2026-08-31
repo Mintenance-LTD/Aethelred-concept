@@ -7,8 +7,11 @@ from aethelred.runtime.configuration import (
     RuntimeConfigurationRegistry,
 )
 from aethelred.runtime.health import (
+    ComponentHealthState,
+    ComponentHealthStatus,
     RuntimeHealthError,
     RuntimeHealthReport,
+    RuntimeHealthSnapshot,
     RuntimeHealthSupervisor,
 )
 from aethelred.runtime.integrity import AuthenticatedIntent, IntegrityError, IntentAuthenticator
@@ -49,6 +52,8 @@ __all__ = [
     "CommandArbiter",
     "CommandExecutionError",
     "CommandReceipt",
+    "ComponentHealthState",
+    "ComponentHealthStatus",
     "IntegrityError",
     "IntentAuthenticator",
     "IntentProposal",
@@ -67,6 +72,7 @@ __all__ = [
     "RuntimeConfigurationRegistry",
     "RuntimeHealthError",
     "RuntimeHealthReport",
+    "RuntimeHealthSnapshot",
     "RuntimeHealthSupervisor",
     "RuntimeIdentity",
     "RuntimeLifecycleError",
