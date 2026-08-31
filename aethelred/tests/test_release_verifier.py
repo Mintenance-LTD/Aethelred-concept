@@ -24,6 +24,9 @@ def _activate_release(tmp_path: Path, model_path: Path) -> tuple[ReleaseLedger, 
         configuration={"device": "cpu"},
         observation_schema="aethelred-observation/v1",
         runtime_target="torchscript",
+        training_data_reference="dataset://held-out/v1",
+        runtime_environment="python=3.11;torch=2.2",
+        build_provenance="build://ci/123",
     )
     approved = ModelPromotionGate().approve(
         manifest,

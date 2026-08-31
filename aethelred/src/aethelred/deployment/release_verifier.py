@@ -39,6 +39,9 @@ class ActiveReleaseVerifier:
         configuration: dict[str, object],
         observation_schema: str,
         runtime_target: str,
+        training_data_reference: str | None = None,
+        runtime_environment: str | None = None,
+        build_provenance: str | None = None,
     ) -> VerifiedReleaseArtifact:
         """Verify all active-release provenance before exposing a loader path."""
         registration = self._ledger.active_registration()
@@ -49,6 +52,9 @@ class ActiveReleaseVerifier:
                 configuration=configuration,
                 observation_schema=observation_schema,
                 runtime_target=runtime_target,
+                training_data_reference=training_data_reference,
+                runtime_environment=runtime_environment,
+                build_provenance=build_provenance,
             )
         except (OSError, ValueError) as error:
             raise ReleaseVerificationError("Active release verification failed") from error
@@ -63,6 +69,9 @@ class ActiveReleaseVerifier:
         configuration: dict[str, object],
         observation_schema: str,
         runtime_target: str,
+        training_data_reference: str | None = None,
+        runtime_environment: str | None = None,
+        build_provenance: str | None = None,
     ) -> Model:
         """Invoke a caller-supplied model loader only after full provenance verification."""
         artifact = self.verify(
@@ -71,5 +80,8 @@ class ActiveReleaseVerifier:
             configuration=configuration,
             observation_schema=observation_schema,
             runtime_target=runtime_target,
+            training_data_reference=training_data_reference,
+            runtime_environment=runtime_environment,
+            build_provenance=build_provenance,
         )
         return loader(artifact.model_path)

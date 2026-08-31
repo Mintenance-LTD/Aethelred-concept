@@ -40,6 +40,9 @@ def test_release_workflow_binds_artifact_evidence_approval_and_ledger(tmp_path) 
         configuration={"schema_version": 1},
         observation_schema="operational-observation/v1",
         runtime_target="torchscript",
+        training_data_reference="dataset://held-out/v1",
+        runtime_environment="python=3.11;torch=2.2",
+        build_provenance="build://ci/123",
         approval=HumanApproval.now("reviewer@example.test", "Held-out evidence reviewed"),
     )
 

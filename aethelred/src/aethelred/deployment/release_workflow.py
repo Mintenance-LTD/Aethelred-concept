@@ -53,6 +53,9 @@ class ReleasePreparationWorkflow:
         configuration: dict[str, object],
         observation_schema: str,
         runtime_target: str,
+        training_data_reference: str,
+        runtime_environment: str,
+        build_provenance: str,
         approval: HumanApproval,
     ) -> ReleasePreparation:
         """Prepare and register an approved release; activation is deliberately absent."""
@@ -67,6 +70,9 @@ class ReleasePreparationWorkflow:
             configuration=configuration,
             observation_schema=observation_schema,
             runtime_target=runtime_target,
+            training_data_reference=training_data_reference,
+            runtime_environment=runtime_environment,
+            build_provenance=build_provenance,
         )
         approved = self._promotion_gate.approve(manifest, report.evaluation, approval)
         registration = self._ledger.register(approved)
