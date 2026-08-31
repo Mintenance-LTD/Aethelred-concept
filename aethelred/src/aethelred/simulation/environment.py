@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import random
-from typing import Any, ClassVar
+from typing import Any
 from uuid import UUID
 
 import gymnasium as gym
@@ -30,16 +30,13 @@ from aethelred.swarm.swarm_unit import SwarmUnit
 from aethelred.tactical_ai.state_encoder import build_observation
 
 
-class AethelredEnv(gym.Env):
+class AethelredEnv(gym.Env[Any, Any]):
     """
     2D continuous-space tactical simulation environment.
     Gymnasium-compatible for standard RL training loops.
     """
 
-    metadata: ClassVar[dict[str, object]] = {
-        "render_modes": ["human", "rgb_array"],
-        "render_fps": 30,
-    }
+    metadata: dict[str, object]
 
     def __init__(
         self,
@@ -47,6 +44,10 @@ class AethelredEnv(gym.Env):
         render_mode: str | None = None,
     ) -> None:
         super().__init__()
+        self.metadata = {
+            "render_modes": ["human", "rgb_array"],
+            "render_fps": 30,
+        }
         self.config = config or SimulationConfig()
         self.render_mode = render_mode
 

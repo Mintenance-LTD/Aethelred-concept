@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import ClassVar
+from typing import Any, ClassVar
 
 import numpy as np
 
@@ -24,8 +24,8 @@ class BattlefieldRenderer:
 
     def __init__(self, config: RenderConfig) -> None:
         self.config = config
-        self._fig = None
-        self._ax = None
+        self._fig: Any = None
+        self._ax: Any = None
         self._initialized = False
 
     def render(

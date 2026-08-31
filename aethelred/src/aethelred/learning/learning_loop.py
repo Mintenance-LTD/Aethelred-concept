@@ -3,6 +3,13 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from hashlib import sha256
+from uuid import UUID, uuid4
+
+import torch
 
 from aethelred.adaptation.adaptation_engine import AdaptationEngine
 from aethelred.adaptation.opponent_model import OpponentBehaviorModel, PredictedThreatAction
@@ -15,16 +22,32 @@ from aethelred.tactical_ai.policy import TacticalPolicy
 logger = logging.getLogger(__name__)
 
 
+@dataclass(frozen=True)
+class OfflineAdaptationCandidate:
+    """An unapproved model update produced for offline evaluation only.
+
+    Candidates deliberately have no method for applying their weights. A separate
+    evaluation, approval, signing, and deployment workflow must handle promotion.
+    """
+
+    candidate_id: UUID
+    created_at: datetime
+    base_weights_digest: str
+    updated_weights: dict[str, torch.Tensor]
+    adaptation_event: AdaptationEvent
+
+
 class LearningLoop:
     """
     Orchestrates the 5-phase learning cycle:
       Phase 1: Observation   - Collect state/action/reward trajectories
       Phase 2: Loss Analysis - Post-mortem when units die
-      Phase 3: Adaptation    - Update tactical AI based on loss analysis
-      Phase 4: Propagation   - Push updated policy to swarm
+      Phase 3: Adaptation    - Generate a candidate from loss analysis
+      Phase 4: Evaluation    - Hand candidate to an offline evaluation workflow
       Phase 5: Prediction    - Model opponent behavior, pre-position
 
-    "The swarm dies so the mother learns. The mother learns so the swarm evolves."
+    This is a research-side loop. It must never mutate a policy used by an
+    operational command path.
     """
 
     def __init__(
@@ -33,21 +56,23 @@ class LearningLoop:
         adaptation_engine: AdaptationEngine,
         config: LearningLoopConfig,
         opponent_model: OpponentBehaviorModel | None = None,
+        candidate_sink: Callable[[OfflineAdaptationCandidate], None] | None = None,
     ) -> None:
         self.tactical_policy = tactical_policy
         self.adaptation_engine = adaptation_engine
         self.config = config
         self.opponent_model = opponent_model or OpponentBehaviorModel()
+        self.candidate_sink = candidate_sink
         self.loss_analyzer = LossAnalyzer()
 
         self.pending_losses: list[LossEvent] = []
         self.adaptation_history: list[AdaptationEvent] = []
         self.analysis_history: list[LossAnalysis] = []
+        self.pending_candidates: list[OfflineAdaptationCandidate] = []
 
         self._steps_since_adaptation = 0
         self._total_steps = 0
         self._total_adaptations = 0
-        self._propagation_callback = None  # set by swarm coordinator
 
     # --- Phase 1: Observation ---
 
@@ -107,15 +132,14 @@ class LearningLoop:
             f"patterns={analysis.patterns}"
         )
 
-        # Phase 3: Adaptation
+        # Phase 3: Adaptation. The result is an offline candidate only; policy
+        # weights in the active runtime are intentionally never modified here.
         original_weights = self.tactical_policy.get_policy_weights()
         result = self.adaptation_engine.adapt(
             model=self.tactical_policy.transformer,
             losses=self.pending_losses,
         )
 
-        # Load adapted weights into policy
-        # We need to wrap them with the encoder/transformer prefixes
         adapted_weights = {}
         for name, param in result.updated_weights.items():
             adapted_weights[f"transformer.{name}"] = param
@@ -123,20 +147,10 @@ class LearningLoop:
         for name, param in self.tactical_policy.state_encoder.named_parameters():
             adapted_weights[f"encoder.{name}"] = param.data.clone()
 
-        self.tactical_policy.load_policy_weights(adapted_weights)
-
         logger.info(
             f"[PHASE 3] Adaptation via {result.method}: "
             f"loss {result.loss_before:.4f} -> {result.loss_after:.4f}"
         )
-
-        # Phase 4: Propagation
-        if self._propagation_callback is not None:
-            delta = self.adaptation_engine.get_model_delta(
-                original_weights, adapted_weights
-            )
-            self._propagation_callback(delta)
-            logger.info("[PHASE 4] Policy update propagated to swarm")
 
         # Phase 5: Prediction — refresh the opponent model from the new losses.
         # (Consuming its predictions to pre-position the swarm is wired via
@@ -156,6 +170,17 @@ class LearningLoop:
             performance_after={"loss": result.loss_after},
         )
         self.adaptation_history.append(event)
+        candidate = OfflineAdaptationCandidate(
+            candidate_id=uuid4(),
+            created_at=datetime.now(UTC),
+            base_weights_digest=self._weight_digest(original_weights),
+            updated_weights={name: weight.detach().clone() for name, weight in adapted_weights.items()},
+            adaptation_event=event,
+        )
+        self.pending_candidates.append(candidate)
+        if self.candidate_sink is not None:
+            self.candidate_sink(candidate)
+        logger.info("[PHASE 4] Candidate %s queued for offline evaluation", candidate.candidate_id)
         self._total_adaptations += 1
 
         # Clear pending losses
@@ -164,9 +189,14 @@ class LearningLoop:
 
         return event
 
-    def set_propagation_callback(self, callback) -> None:
-        """Set callback for Phase 4 propagation (called by SwarmCoordinator)."""
-        self._propagation_callback = callback
+    @staticmethod
+    def _weight_digest(weights: dict[str, torch.Tensor]) -> str:
+        """Create a stable provenance digest for a candidate's base weights."""
+        digest = sha256()
+        for name in sorted(weights):
+            digest.update(name.encode("utf-8"))
+            digest.update(weights[name].detach().cpu().contiguous().numpy().tobytes())
+        return digest.hexdigest()
 
     def get_predictions(
         self, state: BattlefieldState

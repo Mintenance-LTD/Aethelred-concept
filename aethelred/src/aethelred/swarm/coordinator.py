@@ -57,7 +57,8 @@ class SwarmCoordinator:
           - EW: electronic warfare actions
           - RELAY: maintain comm mesh positions
         """
-        commands = []
+        commands: list[dict[str, object]] = []
+        cmd: dict[str, object]
 
         recon_units = [u for u in self.units.values() if u.state.role == DroneRole.RECON]
         engage_units = [u for u in self.units.values() if u.state.role == DroneRole.ENGAGE]

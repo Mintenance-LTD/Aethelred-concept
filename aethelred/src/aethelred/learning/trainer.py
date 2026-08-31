@@ -71,8 +71,8 @@ class RolloutBuffer:
         ``reward_scale`` divides rewards into the value head's (normalized) units;
         since stored ``step.value`` is already in that scale, GAE stays consistent.
         """
-        advantages = []
-        returns = []
+        advantages: list[float] = []
+        returns: list[float] = []
         gae = 0.0
         next_value = 0.0
 

@@ -41,10 +41,8 @@ class MotherDrone:
             max_speed=5.0,  # slow but persistent
         )
 
-        # Connect learning loop's propagation to coordinator
-        self.learning_loop.set_propagation_callback(
-            self.coordinator.propagate_policy_update
-        )
+        # LearningLoop produces offline-only candidates. It is never connected
+        # to the coordinator because policy changes require independent approval.
 
     def tick(self, battlefield_state: BattlefieldState) -> TacticalDecision:
         """

@@ -38,9 +38,7 @@ jobs:
         run: mypy src
 
       - name: Run tests with coverage
-        # Staged baseline: raise to 70% after the legacy simulation and adaptation
-        # modules receive their first dedicated test pass.
-        run: pytest -q --cov=src --cov-report=term-missing --cov-fail-under=65
+        run: pytest -q --cov=src --cov-report=term-missing --cov-fail-under=70
 
       - name: Verify package can be built
         run: python -m pip wheel --no-deps --wheel-dir dist .

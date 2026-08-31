@@ -91,6 +91,14 @@ only its `AuthorisedCommand` can pass through `CommandArbiter` to an adapter.
 decision-only execution path and maps every allowed operational capability to a
 non-offensive simulator action.
 
+## Offline adaptation boundary
+
+`LearningLoop` may derive an `OfflineAdaptationCandidate` from simulated loss
+data, but it never loads those candidate weights into the active policy or
+propagates them to swarm units. Candidates include a digest of their base
+weights and must pass independent evaluation, human approval, signing, and the
+deployment manifest process before any future use.
+
 ## Status / recent fixes
 
 The training and adaptation pipelines were previously non-functional. Fixed:

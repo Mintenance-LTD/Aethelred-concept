@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 
 import torch
 from torch import nn
@@ -31,7 +31,7 @@ class EWCRegularizer:
         task_name: str,
         model: nn.Module,
         data_iterator: Iterator[tuple[torch.Tensor, torch.Tensor]],
-        loss_fn: callable,
+        loss_fn: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
     ) -> None:
         """
         After model masters a task, compute and store Fisher Information.
@@ -84,7 +84,7 @@ class EWCRegularizer:
         self,
         model: nn.Module,
         data_iterator: Iterator[tuple[torch.Tensor, torch.Tensor]],
-        loss_fn: callable,
+        loss_fn: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
     ) -> dict[str, torch.Tensor]:
         """Compute diagonal Fisher Information Matrix via empirical estimate."""
         fisher: dict[str, torch.Tensor] = {}
