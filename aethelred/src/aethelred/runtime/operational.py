@@ -565,7 +565,11 @@ class AuthenticatedOperationalControlLoop:
         self._control_loop._journal.record(
             "intent_authenticated",
             correlation_id=str(proposal.proposal_id),
-            payload={"issuer_id": envelope.issuer_id, "nonce": envelope.nonce},
+            payload={
+                "issuer_id": envelope.issuer_id,
+                "key_id": envelope.key_id,
+                "nonce": envelope.nonce,
+            },
         )
         try:
             return self._control_loop._submit_verified(proposal, state, registered_mission, executor, now)

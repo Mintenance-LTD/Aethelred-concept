@@ -95,6 +95,30 @@ def test_tampered_or_replayed_intent_cannot_reach_adapter(tmp_path) -> None:
     assert adapter.command_id is not None
 
 
+def test_intent_authentication_rotates_keys_without_recording_key_material(tmp_path) -> None:
+    _, _, proposal, now = _runtime_inputs()
+    journal = JsonlAuditJournal(tmp_path / "audit.jsonl")
+    authenticator = IntentAuthenticator(b"a" * 32, journal, key_id="planner-v1")
+    retained = authenticator.sign(proposal, "planner-service", issued_at=now, nonce="retained")
+    retired = authenticator.sign(proposal, "planner-service", issued_at=now, nonce="retired")
+
+    authenticator.rotate("planner-v2", b"b" * 32)
+    current = authenticator.sign(proposal, "planner-service", issued_at=now, nonce="current")
+
+    assert retained.key_id == "planner-v1"
+    assert current.key_id == "planner-v2"
+    authenticator.verify(retained, now)
+    authenticator.verify(current, now)
+    authenticator.rotate("planner-v2", b"b" * 32, retire_key_ids=("planner-v1",))
+    with pytest.raises(IntegrityError, match="not trusted"):
+        authenticator.verify(retired, now)
+    rotation_events = [
+        event for event in journal.read_all() if event["event_type"] == "intent_authentication_key_rotated"
+    ]
+    assert rotation_events[-1]["correlation_id"] == "planner-v2"
+    assert "b" * 32 not in str(rotation_events)
+
+
 def test_signed_but_unapproved_issuer_cannot_reach_adapter(tmp_path) -> None:
     mission, state, proposal, now = _runtime_inputs()
     journal = JsonlAuditJournal(tmp_path / "audit.jsonl")
