@@ -104,6 +104,10 @@ def test_authenticated_intent_is_verified_before_safety_and_execution(tmp_path) 
         assert {"release_id", "software_revision", "model_sha256", "configuration_sha256"} <= set(
             event["payload"]
         )
+    telemetry = next(event for event in attributed_events if event["event_type"] == "telemetry_observed")
+    assert telemetry["payload"]["observation_source_id"] == "simulated-estimator"
+    assert telemetry["payload"]["coordinate_frame"] == "local-enu"
+    assert telemetry["payload"]["observation_sequence"] == 42
 
 
 def test_tampered_or_replayed_intent_cannot_reach_adapter(tmp_path) -> None:

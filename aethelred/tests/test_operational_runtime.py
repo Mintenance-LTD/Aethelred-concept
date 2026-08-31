@@ -17,6 +17,7 @@ from aethelred.runtime.operational import (
     IntentProposal,
     Mission,
     MissionCapability,
+    ObservationProvenance,
     OperatingArea,
     OperationalControlLoop,
     OperationalSafetySupervisor,
@@ -97,6 +98,14 @@ def _runtime_inputs() -> tuple[Mission, WorldState, IntentProposal, datetime]:
         communications_healthy=True,
         operator_link_active=True,
         runtime_healthy=True,
+        observation=ObservationProvenance(
+            observation_id=uuid4(),
+            source_id="simulated-estimator",
+            coordinate_frame="local-enu",
+            schema_version="aethelred-observation/v1",
+            sequence=42,
+            uncertainty=0.05,
+        ),
     )
     proposal = IntentProposal(
         proposal_id=uuid4(),
@@ -190,6 +199,15 @@ def test_operating_area_rejects_invalid_bounds_and_non_finite_positions():
     assert not area.contains(Vec2(x=float("nan"), y=0.0))
 
 
+def test_observation_provenance_requires_identifiable_finite_metadata():
+    with pytest.raises(ValueError, match="source"):
+        ObservationProvenance(uuid4(), "", "local-enu", "v1", 0, 0.1)
+    with pytest.raises(ValueError, match="sequence"):
+        ObservationProvenance(uuid4(), "estimator", "local-enu", "v1", -1, 0.1)
+    with pytest.raises(ValueError, match="uncertainty"):
+        ObservationProvenance(uuid4(), "estimator", "local-enu", "v1", 0, float("nan"))
+
+
 @pytest.mark.parametrize(
     ("changes", "expected_rule"),
     [
@@ -200,6 +218,7 @@ def test_operating_area_rejects_invalid_bounds_and_non_finite_positions():
         ({"operator_link_active": False}, "operator_link"),
         ({"runtime_healthy": False}, "runtime_health"),
         ({"battery_reserve": float("nan")}, "telemetry_values"),
+        ({"observation": ObservationProvenance(uuid4(), "estimator", "local-enu", "v1", 8, 0.3)}, "observation_uncertainty"),
     ],
 )
 def test_runtime_health_constraints_fail_closed(changes, expected_rule):

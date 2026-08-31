@@ -105,6 +105,27 @@ class WorldState:
     communications_healthy: bool
     operator_link_active: bool
     runtime_healthy: bool
+    observation: ObservationProvenance
+
+
+@dataclass(frozen=True)
+class ObservationProvenance:
+    """Versioned source metadata for the observation used to form world state."""
+
+    observation_id: UUID
+    source_id: str
+    coordinate_frame: str
+    schema_version: str
+    sequence: int
+    uncertainty: float
+
+    def __post_init__(self) -> None:
+        if not all(value.strip() for value in (self.source_id, self.coordinate_frame, self.schema_version)):
+            raise ValueError("Observation source, coordinate frame, and schema version are required")
+        if self.sequence < 0:
+            raise ValueError("Observation sequence must not be negative")
+        if not isfinite(self.uncertainty) or not 0.0 <= self.uncertainty <= 1.0:
+            raise ValueError("Observation uncertainty must be a finite ratio")
 
 
 @dataclass(frozen=True)
@@ -204,6 +225,7 @@ class OperationalSafetySupervisor:
     max_sensor_age: timedelta = field(default=timedelta(seconds=1))
     min_battery_reserve: float = 0.20
     min_localisation_quality: float = 0.75
+    max_observation_uncertainty: float = 0.25
 
     def authorise(
         self,
@@ -233,6 +255,8 @@ class OperationalSafetySupervisor:
         telemetry_values = (state.battery_reserve, state.localisation_quality)
         if not all(isfinite(value) and 0.0 <= value <= 1.0 for value in telemetry_values):
             return self._reject("telemetry_values", "Operational telemetry values must be finite ratios")
+        if state.observation.uncertainty > self.max_observation_uncertainty:
+            return self._reject("observation_uncertainty", "Observation uncertainty exceeds the runtime limit")
         if proposal.mission_id != mission.mission_id or proposal.mission_revision != mission.revision:
             return self._reject("mission_identity", "Proposal does not match the approved mission")
         if proposal.vehicle_id != state.vehicle_id or proposal.vehicle_id not in mission.assigned_vehicle_ids:
@@ -512,6 +536,12 @@ class OperationalControlLoop:
                 "communications_healthy": state.communications_healthy,
                 "operator_link_active": state.operator_link_active,
                 "runtime_healthy": state.runtime_healthy,
+                "observation_id": str(state.observation.observation_id),
+                "observation_source_id": state.observation.source_id,
+                "coordinate_frame": state.observation.coordinate_frame,
+                "observation_schema_version": state.observation.schema_version,
+                "observation_sequence": state.observation.sequence,
+                "observation_uncertainty": state.observation.uncertainty,
             },
         )
         self._journal.record(
