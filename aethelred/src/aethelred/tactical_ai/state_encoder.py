@@ -161,7 +161,10 @@ class BattlefieldStateEncoder(nn.Module):
             nn.GELU(),
             nn.Conv2d(16, 32, kernel_size=3, stride=2, padding=1),
             nn.GELU(),
-            nn.AdaptiveAvgPool2d((4, 4)),
+            # A fixed resize keeps the documented 50x50 terrain contract while
+            # avoiding AdaptiveAvgPool's non-divisible 13x13 -> 4x4 lowering,
+            # which ONNX cannot represent on all supported exporters.
+            nn.Upsample(size=(4, 4), mode="bilinear", align_corners=False),
             nn.Flatten(),
             nn.Linear(32 * 4 * 4, config.terrain_embed_dim),
         )
