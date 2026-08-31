@@ -1,6 +1,11 @@
 """Domain-neutral operational runtime contracts for bounded autonomy."""
 
 from aethelred.runtime.audit import AuditEvent, AuditIntegrityError, JsonlAuditJournal
+from aethelred.runtime.configuration import (
+    RuntimeConfiguration,
+    RuntimeConfigurationError,
+    RuntimeConfigurationRegistry,
+)
 from aethelred.runtime.integrity import AuthenticatedIntent, IntegrityError, IntentAuthenticator
 from aethelred.runtime.lifecycle import (
     RuntimeLifecycleError,
@@ -47,6 +52,9 @@ __all__ = [
     "OperatingArea",
     "OperationalControlLoop",
     "OperationalSafetySupervisor",
+    "RuntimeConfiguration",
+    "RuntimeConfigurationError",
+    "RuntimeConfigurationRegistry",
     "RuntimeLifecycleError",
     "RuntimeLifecycleState",
     "RuntimeLifecycleSupervisor",
