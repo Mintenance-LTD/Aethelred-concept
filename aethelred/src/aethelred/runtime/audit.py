@@ -8,7 +8,8 @@ from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from hashlib import sha256
 from pathlib import Path
-from typing import Any
+from threading import Lock, RLock
+from typing import Any, ClassVar
 from uuid import UUID, uuid4
 
 
@@ -32,8 +33,14 @@ class AuditIntegrityError(ValueError):
 class JsonlAuditJournal:
     """A small, durable, append-only JSON Lines journal for local deployments."""
 
+    _path_locks_guard: ClassVar[Any] = Lock()
+    _path_locks: ClassVar[dict[Path, Any]] = {}
+
     def __init__(self, path: str | Path) -> None:
         self.path = Path(path)
+        lock_path = self.path.resolve()
+        with self._path_locks_guard:
+            self._lock = self._path_locks.setdefault(lock_path, RLock())
 
     def record(
         self,
@@ -42,34 +49,35 @@ class JsonlAuditJournal:
         payload: dict[str, Any],
     ) -> AuditEvent:
         """Persist one event and fsync it before acknowledging the write."""
-        existing_events = self.read_all()
-        previous_hash = existing_events[-1]["event_hash"] if existing_events else None
-        event_id = uuid4()
-        occurred_at = datetime.now(UTC)
-        unsigned_event: dict[str, Any] = {
-            "event_id": event_id,
-            "occurred_at": occurred_at,
-            "event_type": event_type,
-            "correlation_id": correlation_id,
-            "payload": payload,
-            "previous_hash": previous_hash,
-        }
-        event = AuditEvent(
-            event_id=event_id,
-            occurred_at=occurred_at,
-            event_type=event_type,
-            correlation_id=correlation_id,
-            payload=payload,
-            previous_hash=previous_hash,
-            event_hash=self._hash_event(unsigned_event),
-        )
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        encoded = self._canonical_json(asdict(event))
-        with self.path.open("a", encoding="utf-8", newline="\n") as handle:
-            handle.write(f"{encoded}\n")
-            handle.flush()
-            os.fsync(handle.fileno())
-        return event
+        with self._lock:
+            existing_events = self.read_all()
+            previous_hash = existing_events[-1]["event_hash"] if existing_events else None
+            event_id = uuid4()
+            occurred_at = datetime.now(UTC)
+            unsigned_event: dict[str, Any] = {
+                "event_id": event_id,
+                "occurred_at": occurred_at,
+                "event_type": event_type,
+                "correlation_id": correlation_id,
+                "payload": payload,
+                "previous_hash": previous_hash,
+            }
+            event = AuditEvent(
+                event_id=event_id,
+                occurred_at=occurred_at,
+                event_type=event_type,
+                correlation_id=correlation_id,
+                payload=payload,
+                previous_hash=previous_hash,
+                event_hash=self._hash_event(unsigned_event),
+            )
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            encoded = self._canonical_json(asdict(event))
+            with self.path.open("a", encoding="utf-8", newline="\n") as handle:
+                handle.write(f"{encoded}\n")
+                handle.flush()
+                os.fsync(handle.fileno())
+            return event
 
     def read_all(self) -> list[dict[str, Any]]:
         """Return verified events in order, rejecting corruption or tampering."""

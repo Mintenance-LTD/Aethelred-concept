@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
@@ -31,3 +32,17 @@ def test_audit_journal_rejects_tampered_event_content(tmp_path) -> None:
 
     with pytest.raises(AuditIntegrityError, match="line 1"):
         journal.read_all()
+
+
+def test_concurrent_journal_instances_preserve_one_hash_chain(tmp_path) -> None:
+    path = tmp_path / "audit.jsonl"
+
+    def record(index: int) -> None:
+        JsonlAuditJournal(path).record("telemetry_observed", str(index), {"index": index})
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        list(executor.map(record, range(32)))
+
+    events = JsonlAuditJournal(path).read_all()
+    assert len(events) == 32
+    assert {event["correlation_id"] for event in events} == {str(index) for index in range(32)}
