@@ -179,8 +179,9 @@ which is noisy — the latest checkpoint is often a better survival policy than 
 
 ### Known remaining work (design notes, not bugs)
 
-- `ModelExporter` uses `torch.jit.trace`, which bakes in trace-time control flow;
-  revisit if exporting models with heavily data-dependent branching.
+- The TorchScript deployment exporter scripts the inference wrapper first and
+  falls back to tracing only for runtime compatibility. The scripted path is
+  exercised directly in the test suite.
 - Checkpoint selection uses the rolling 100-episode reward aggregate rather than
   a single rollout. A future release process should still prefer a fully separate,
   held-out evaluation suite when simulation resources permit it.
