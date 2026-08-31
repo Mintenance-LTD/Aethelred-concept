@@ -4,10 +4,15 @@ from __future__ import annotations
 
 import json
 from concurrent.futures import ThreadPoolExecutor
+from multiprocessing import get_context
 
 import pytest
 
 from aethelred.runtime.audit import AuditIntegrityError, JsonlAuditJournal
+
+
+def _record_from_separate_process(path: str, index: int) -> None:
+    JsonlAuditJournal(path).record("telemetry_observed", str(index), {"index": index})
 
 
 def test_audit_journal_links_successive_events_with_hashes(tmp_path) -> None:
@@ -46,3 +51,21 @@ def test_concurrent_journal_instances_preserve_one_hash_chain(tmp_path) -> None:
     events = JsonlAuditJournal(path).read_all()
     assert len(events) == 32
     assert {event["correlation_id"] for event in events} == {str(index) for index in range(32)}
+
+
+def test_separate_process_writers_preserve_one_hash_chain(tmp_path) -> None:
+    path = tmp_path / "audit.jsonl"
+    context = get_context("spawn")
+    processes = [
+        context.Process(target=_record_from_separate_process, args=(str(path), index))
+        for index in range(8)
+    ]
+    for process in processes:
+        process.start()
+    for process in processes:
+        process.join(timeout=20)
+        assert process.exitcode == 0
+
+    events = JsonlAuditJournal(path).read_all()
+    assert len(events) == 8
+    assert {event["correlation_id"] for event in events} == {str(index) for index in range(8)}

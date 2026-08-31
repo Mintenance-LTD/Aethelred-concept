@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from hashlib import sha256
@@ -49,7 +50,7 @@ class JsonlAuditJournal:
         payload: dict[str, Any],
     ) -> AuditEvent:
         """Persist one event and fsync it before acknowledging the write."""
-        with self._lock:
+        with self._append_lock():
             existing_events = self.read_all()
             previous_hash = existing_events[-1]["event_hash"] if existing_events else None
             event_id = uuid4()
@@ -78,6 +79,55 @@ class JsonlAuditJournal:
                 handle.flush()
                 os.fsync(handle.fileno())
             return event
+
+    @contextmanager
+    def _append_lock(self):
+        """Serialize one read-hash-append transaction across local processes.
+
+        The sidecar lock is advisory, so every process that writes the journal
+        must use this class.  It deliberately remains in place after release:
+        the operating-system lock, rather than deleting a sentinel file,
+        determines ownership and is released if a writer process crashes.
+        """
+        with self._lock:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            lock_path = self.path.with_suffix(f"{self.path.suffix}.lock")
+            with lock_path.open("a+b") as handle:
+                handle.seek(0)
+                handle.write(b"\\0")
+                handle.flush()
+                try:
+                    self._lock_file(handle)
+                except OSError as error:
+                    raise AuditIntegrityError("could not acquire audit journal lock") from error
+                try:
+                    yield
+                finally:
+                    self._unlock_file(handle)
+
+    @staticmethod
+    def _lock_file(handle: Any) -> None:
+        if os.name == "nt":
+            import msvcrt
+
+            handle.seek(0)
+            msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
+            return
+        import fcntl
+
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)  # type: ignore[attr-defined]
+
+    @staticmethod
+    def _unlock_file(handle: Any) -> None:
+        if os.name == "nt":
+            import msvcrt
+
+            handle.seek(0)
+            msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+            return
+        import fcntl
+
+        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)  # type: ignore[attr-defined]
 
     def read_all(self) -> list[dict[str, Any]]:
         """Return verified events in order, rejecting corruption or tampering."""
