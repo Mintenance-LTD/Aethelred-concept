@@ -74,6 +74,48 @@ class JsonlAuditJournal:
                 return None
             return self._record_locked(event_type, correlation_id, payload)
 
+    def record_command_execution_started(
+        self,
+        correlation_id: str,
+        payload: dict[str, Any],
+    ) -> AuditEvent:
+        """Atomically allocate and persist a per-vehicle command sequence.
+
+        A sequence is meaningful only when its allocation and durable command
+        consumption record cannot be separated.  Sharing the journal lock
+        prevents two local runtime processes from allocating the same sequence
+        for one vehicle.
+        """
+        vehicle_id = payload.get("vehicle_id")
+        if not isinstance(vehicle_id, str) or not vehicle_id:
+            raise ValueError("Command-start payload requires a vehicle ID")
+        with self._append_lock():
+            events = self.read_all()
+            if any(
+                event.get("event_type") == "command_execution_started"
+                and event.get("correlation_id") == correlation_id
+                for event in events
+            ):
+                raise AuditIntegrityError("Command execution has already been started")
+            last_sequence = 0
+            for event in events:
+                if event.get("event_type") != "command_execution_started":
+                    continue
+                recorded_payload = event.get("payload")
+                if not isinstance(recorded_payload, dict):
+                    raise AuditIntegrityError("Command-start record has an invalid payload")
+                if recorded_payload.get("vehicle_id") != vehicle_id:
+                    continue
+                sequence = recorded_payload.get("sequence")
+                if type(sequence) is not int or sequence < 1:
+                    raise AuditIntegrityError("Command-start record has an invalid sequence")
+                last_sequence = max(last_sequence, sequence)
+            return self._record_locked(
+                "command_execution_started",
+                correlation_id,
+                {**payload, "sequence": last_sequence + 1},
+            )
+
     def _record_locked(
         self,
         event_type: str,

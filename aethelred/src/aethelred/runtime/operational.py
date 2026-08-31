@@ -17,7 +17,7 @@ from typing import Protocol
 from uuid import UUID, uuid4
 
 from aethelred.core.models import Vec2
-from aethelred.runtime.audit import JsonlAuditJournal
+from aethelred.runtime.audit import AuditIntegrityError, JsonlAuditJournal
 
 
 class MissionCapability(str, Enum):
@@ -370,25 +370,29 @@ class CommandArbiter:
             self._record_rejection(str(command.command_id), "Authorised command has already been consumed")
             raise PermissionError("Authorised command has already been consumed")
 
-        sequence = self._last_sequence_by_vehicle.get(command.vehicle_id, 0) + 1
+        if self._journal is not None:
+            try:
+                start_event = self._journal.record_command_execution_started(
+                    correlation_id=str(command.command_id),
+                    payload={
+                        **self._identity_payload(),
+                        "proposal_id": str(command.proposal_id),
+                        "mission_id": str(command.mission_id),
+                        "vehicle_id": command.vehicle_id,
+                        "capability": command.capability.value,
+                    },
+                )
+            except (AuditIntegrityError, ValueError) as error:
+                raise CommandExecutionError("Could not durably allocate command sequence") from error
+            sequence = start_event.payload["sequence"]
+            assert type(sequence) is int
+        else:
+            sequence = self._last_sequence_by_vehicle.get(command.vehicle_id, 0) + 1
         command = replace(command, sequence=sequence)
         self._last_sequence_by_vehicle[command.vehicle_id] = sequence
         # Consume before adapter invocation: a timeout or exception cannot be
         # safely distinguished from a partially applied external command.
         self._consumed_command_ids.add(command.command_id)
-        if self._journal is not None:
-            self._journal.record(
-                "command_execution_started",
-                correlation_id=str(command.command_id),
-                payload={
-                    **self._identity_payload(),
-                    "proposal_id": str(command.proposal_id),
-                    "mission_id": str(command.mission_id),
-                    "vehicle_id": command.vehicle_id,
-                    "capability": command.capability.value,
-                    "sequence": command.sequence,
-                },
-            )
         try:
             receipt = executor.execute(command)
         except Exception as error:

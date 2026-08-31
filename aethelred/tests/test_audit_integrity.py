@@ -15,6 +15,12 @@ def _record_from_separate_process(path: str, index: int) -> None:
     JsonlAuditJournal(path).record("telemetry_observed", str(index), {"index": index})
 
 
+def _allocate_command_sequence_from_separate_process(path: str, index: int) -> None:
+    JsonlAuditJournal(path).record_command_execution_started(
+        str(index), {"vehicle_id": "vehicle-1", "proposal_id": str(index)}
+    )
+
+
 def test_audit_journal_links_successive_events_with_hashes(tmp_path) -> None:
     journal = JsonlAuditJournal(tmp_path / "audit.jsonl")
     first = journal.record("intent_proposed", "proposal-1", {"source": "test"})
@@ -80,3 +86,20 @@ def test_separate_process_writers_preserve_one_hash_chain(tmp_path) -> None:
     events = JsonlAuditJournal(path).read_all()
     assert len(events) == 8
     assert {event["correlation_id"] for event in events} == {str(index) for index in range(8)}
+
+
+def test_separate_process_command_starts_receive_unique_sequences(tmp_path) -> None:
+    path = tmp_path / "audit.jsonl"
+    context = get_context("spawn")
+    processes = [
+        context.Process(target=_allocate_command_sequence_from_separate_process, args=(str(path), index))
+        for index in range(8)
+    ]
+    for process in processes:
+        process.start()
+    for process in processes:
+        process.join(timeout=20)
+        assert process.exitcode == 0
+
+    events = JsonlAuditJournal(path).read_all()
+    assert sorted(event["payload"]["sequence"] for event in events) == list(range(1, 9))
