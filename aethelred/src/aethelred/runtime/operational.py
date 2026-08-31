@@ -76,6 +76,14 @@ class Mission:
     authorised_issuer_ids: frozenset[str]
 
     def __post_init__(self) -> None:
+        if self.revision < 1:
+            raise ValueError("Mission revision must be positive")
+        if self.valid_from.tzinfo is None or self.valid_until.tzinfo is None:
+            raise ValueError("Mission validity timestamps must be timezone-aware")
+        if self.valid_until <= self.valid_from:
+            raise ValueError("Mission valid_until must be after valid_from")
+        if not self.allowed_capabilities or not self.assigned_vehicle_ids:
+            raise ValueError("Mission must grant capabilities and assigned vehicles")
         if not self.authorised_issuer_ids or any(not issuer.strip() for issuer in self.authorised_issuer_ids):
             raise ValueError("Mission must declare at least one non-empty authorised issuer")
 
@@ -459,9 +467,15 @@ class OperationalControlLoop:
 class AuthenticatedOperationalControlLoop:
     """Production-facing loop that requires verified intent integrity first."""
 
-    def __init__(self, control_loop: OperationalControlLoop, authenticator: object) -> None:
+    def __init__(
+        self,
+        control_loop: OperationalControlLoop,
+        authenticator: object,
+        mission_registry: object,
+    ) -> None:
         self._control_loop = control_loop
         self._authenticator = authenticator
+        self._mission_registry = mission_registry
 
     def submit(
         self,
@@ -480,13 +494,25 @@ class AuthenticatedOperationalControlLoop:
             IntegrityError,
             IntentAuthenticator,
         )
+        from aethelred.runtime.missions import MissionRegistry, MissionRegistryError
 
         if not isinstance(self._authenticator, IntentAuthenticator):
             raise TypeError("Authenticated loop requires an IntentAuthenticator")
         if not isinstance(envelope, AuthenticatedIntent):
             raise TypeError("Authenticated loop requires an AuthenticatedIntent")
+        if not isinstance(self._mission_registry, MissionRegistry):
+            raise TypeError("Authenticated loop requires a MissionRegistry")
+        try:
+            registered_mission = self._mission_registry.require_registered(mission)
+        except MissionRegistryError as error:
+            self._control_loop._journal.record(
+                "mission_authorisation_rejected",
+                correlation_id=str(mission.mission_id),
+                payload={"reason": str(error)},
+            )
+            raise PermissionError("Intent mission is not currently registered") from error
         proposal = self._authenticator.verify(envelope, now)
-        if envelope.issuer_id not in mission.authorised_issuer_ids:
+        if envelope.issuer_id not in registered_mission.authorised_issuer_ids:
             self._control_loop._journal.record(
                 "intent_authentication_rejected",
                 correlation_id=str(proposal.proposal_id),
@@ -498,4 +524,6 @@ class AuthenticatedOperationalControlLoop:
             correlation_id=str(proposal.proposal_id),
             payload={"issuer_id": envelope.issuer_id, "nonce": envelope.nonce},
         )
-        return self._control_loop._submit_verified(proposal, state, mission, executor, now)
+        return self._control_loop._submit_verified(
+            proposal, state, registered_mission, executor, now
+        )

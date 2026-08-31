@@ -154,6 +154,11 @@ Every verified proposal writes a hash-chained `telemetry_observed` record before
 its intent and safety-decision records, preserving the exact operational snapshot
 considered by the authoriser.
 
+`MissionRegistry` persists operator-accountable mission registrations and their
+strictly increasing revisions in the same hash-chained journal. The authenticated
+loop rejects unknown or superseded mission objects before it verifies an envelope
+or reaches the safety supervisor.
+
 `ActiveReleaseVerifier` is the runtime artefact boundary: it requires an active
 ledger registration and compares the exact model digest, filename, code revision,
 canonical runtime configuration, observation schema, and runtime target before it

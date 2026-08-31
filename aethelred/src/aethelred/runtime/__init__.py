@@ -2,6 +2,7 @@
 
 from aethelred.runtime.audit import AuditEvent, AuditIntegrityError, JsonlAuditJournal
 from aethelred.runtime.integrity import AuthenticatedIntent, IntegrityError, IntentAuthenticator
+from aethelred.runtime.missions import MissionRegistration, MissionRegistry, MissionRegistryError
 from aethelred.runtime.operational import (
     AuthenticatedOperationalControlLoop,
     AuthorisationOutcome,
@@ -35,6 +36,9 @@ __all__ = [
     "JsonlAuditJournal",
     "Mission",
     "MissionCapability",
+    "MissionRegistration",
+    "MissionRegistry",
+    "MissionRegistryError",
     "OperatingArea",
     "OperationalControlLoop",
     "OperationalSafetySupervisor",
