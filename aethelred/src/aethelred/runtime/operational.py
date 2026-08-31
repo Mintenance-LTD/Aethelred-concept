@@ -134,6 +134,17 @@ class OperationalSafetySupervisor:
         checked_at = now or datetime.now(UTC)
         rule_ids: list[str] = []
 
+        timestamps = (
+            checked_at,
+            mission.valid_from,
+            mission.valid_until,
+            state.observed_at,
+            proposal.expires_at,
+        )
+        if any(timestamp.tzinfo is None for timestamp in timestamps):
+            return self._reject("timestamp_timezone", "Safety timestamps must be timezone-aware")
+        if state.observed_at > checked_at:
+            return self._reject("state_timestamp", "World state observation is in the future")
         if proposal.mission_id != mission.mission_id or proposal.mission_revision != mission.revision:
             return self._reject("mission_identity", "Proposal does not match the approved mission")
         if proposal.vehicle_id != state.vehicle_id or proposal.vehicle_id not in mission.assigned_vehicle_ids:
@@ -185,35 +196,108 @@ class CommandArbiter:
 
     def __init__(self, journal: JsonlAuditJournal | None = None) -> None:
         self._journal = journal
+        self._consumed_command_ids: set[UUID] = set()
+        if journal is not None:
+            self._recover_consumed_commands()
 
     def execute(
         self,
         executor: AuthorisedCommandExecutor,
         result: AuthorisationResult,
+        now: datetime | None = None,
     ) -> CommandReceipt:
-        """Reject unauthorised proposals before they reach an adapter."""
+        """Execute one fresh authorised command and verify its acknowledgement.
+
+        Command identifiers are consumed before invoking the adapter, including
+        after process restart via journal replay. This fails closed when an
+        adapter's outcome is uncertain instead of reissuing the same command.
+        """
         if result.outcome is not AuthorisationOutcome.AUTHORISED or result.command is None:
-            if self._journal is not None:
-                self._journal.record(
-                    "command_rejected",
-                    correlation_id="unavailable",
-                    payload={"reason": result.reason, "rule_ids": result.rule_ids},
-                )
+            self._record_rejection("unavailable", result.reason, result.rule_ids)
             raise PermissionError("An authorised command is required for execution")
-        receipt = executor.execute(result.command)
+
+        command = result.command
+        checked_at = now or datetime.now(UTC)
+        if checked_at.tzinfo is None:
+            self._record_rejection(str(command.command_id), "Execution time must be timezone-aware")
+            raise PermissionError("Execution time must be timezone-aware")
+        if command.expires_at.tzinfo is None or checked_at >= command.expires_at:
+            self._record_rejection(str(command.command_id), "Authorised command has expired")
+            raise PermissionError("Authorised command has expired")
+        if command.command_id in self._consumed_command_ids:
+            self._record_rejection(str(command.command_id), "Authorised command has already been consumed")
+            raise PermissionError("Authorised command has already been consumed")
+
+        # Consume before adapter invocation: a timeout or exception cannot be
+        # safely distinguished from a partially applied external command.
+        self._consumed_command_ids.add(command.command_id)
+        if self._journal is not None:
+            self._journal.record(
+                "command_execution_started",
+                correlation_id=str(command.command_id),
+                payload={
+                    "proposal_id": str(command.proposal_id),
+                    "mission_id": str(command.mission_id),
+                    "vehicle_id": command.vehicle_id,
+                    "capability": command.capability.value,
+                },
+            )
+        try:
+            receipt = executor.execute(command)
+        except Exception as error:
+            self._record_rejection(str(command.command_id), f"Adapter execution failed: {error}")
+            raise
+        if receipt.command_id != command.command_id:
+            self._record_rejection(str(command.command_id), "Adapter receipt command ID does not match")
+            raise RuntimeError("Adapter receipt command ID does not match authorised command")
         if self._journal is not None:
             self._journal.record(
                 "command_executed",
-                correlation_id=str(result.command.command_id),
+                correlation_id=str(command.command_id),
                 payload={
-                    "proposal_id": str(result.command.proposal_id),
-                    "mission_id": str(result.command.mission_id),
-                    "vehicle_id": result.command.vehicle_id,
-                    "capability": result.command.capability.value,
+                    "proposal_id": str(command.proposal_id),
+                    "mission_id": str(command.mission_id),
+                    "vehicle_id": command.vehicle_id,
+                    "capability": command.capability.value,
                     "accepted": receipt.accepted,
+                    "detail": receipt.detail,
                 },
             )
         return receipt
+
+    def _recover_consumed_commands(self) -> None:
+        """Restore one-time-use command IDs from a verified audit journal."""
+        assert self._journal is not None
+        for event in self._journal.read_all():
+            event_type = event.get("event_type")
+            if event_type not in {"command_execution_started", "command_executed"}:
+                continue
+            try:
+                command_id = UUID(str(event["correlation_id"]))
+            except (KeyError, TypeError, ValueError) as error:
+                raise ValueError("Invalid executed-command audit record") from error
+            if event_type == "command_execution_started":
+                if command_id in self._consumed_command_ids:
+                    raise ValueError("Duplicate command-execution start audit record")
+                self._consumed_command_ids.add(command_id)
+            elif command_id not in self._consumed_command_ids:
+                # Support journals written before execution-start events were
+                # introduced, while still treating their completed commands as
+                # permanently consumed.
+                self._consumed_command_ids.add(command_id)
+
+    def _record_rejection(
+        self,
+        correlation_id: str,
+        reason: str,
+        rule_ids: tuple[str, ...] = (),
+    ) -> None:
+        if self._journal is not None:
+            self._journal.record(
+                "command_rejected",
+                correlation_id=correlation_id,
+                payload={"reason": reason, "rule_ids": rule_ids},
+            )
 
 
 class OperationalControlLoop:
@@ -261,7 +345,7 @@ class OperationalControlLoop:
                 "command_id": str(result.command.command_id) if result.command else None,
             },
         )
-        return self._arbiter.execute(executor, result)
+        return self._arbiter.execute(executor, result, now)
 
 
 class AuthenticatedOperationalControlLoop:

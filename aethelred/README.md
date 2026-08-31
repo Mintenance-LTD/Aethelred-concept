@@ -127,6 +127,12 @@ Every audit event is hash-chained to its predecessor, so replay also fails
 closed when a persisted event is altered, deleted from the middle of the log, or
 otherwise breaks the recorded sequence.
 
+At the final execution boundary, each authorised command is short-lived and
+single-use. The arbiter rejects expired or replayed command IDs before calling
+an adapter, records dispatch before invoking that adapter, reconstructs consumed
+IDs from the verified journal after restart, and rejects acknowledgements that
+do not identify the same command.
+
 ## Status / recent fixes
 
 The training and adaptation pipelines were previously non-functional. Fixed:

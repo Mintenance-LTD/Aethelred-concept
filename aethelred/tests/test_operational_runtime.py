@@ -32,6 +32,11 @@ class _RecordingAdapter:
         return CommandReceipt(command_id=command.command_id, accepted=True, recorded_at=datetime.now(UTC))
 
 
+class _MismatchedReceiptAdapter:
+    def execute(self, command):
+        return CommandReceipt(command_id=uuid4(), accepted=True, recorded_at=datetime.now(UTC))
+
+
 class _RecordingSimulation:
     def __init__(self, state: WorldState) -> None:
         self._state = state
@@ -94,8 +99,11 @@ def test_only_authorised_command_reaches_adapter(tmp_path):
     assert result.outcome is AuthorisationOutcome.AUTHORISED
     assert adapter.command_id == receipt.command_id
     events = journal.read_all()
-    assert events[0]["event_type"] == "command_executed"
-    assert events[0]["payload"]["accepted"]
+    assert [event["event_type"] for event in events] == [
+        "command_execution_started",
+        "command_executed",
+    ]
+    assert events[1]["payload"]["accepted"]
 
 
 def test_stale_or_disallowed_proposals_cannot_execute():
@@ -109,6 +117,53 @@ def test_stale_or_disallowed_proposals_cannot_execute():
         CommandArbiter().execute(_RecordingAdapter(), result)
 
 
+def test_future_state_cannot_be_authorised():
+    mission, state, proposal, now = _runtime_inputs()
+    future_state = WorldState(**{**state.__dict__, "observed_at": now + timedelta(seconds=1)})
+
+    result = OperationalSafetySupervisor().authorise(proposal, future_state, mission, now)
+
+    assert result.outcome is AuthorisationOutcome.REJECTED
+    assert result.rule_ids == ("state_timestamp",)
+
+
+def test_command_expiry_replay_and_restart_are_rejected(tmp_path):
+    mission, state, proposal, now = _runtime_inputs()
+    result = OperationalSafetySupervisor().authorise(proposal, state, mission, now)
+    journal = JsonlAuditJournal(tmp_path / "audit.jsonl")
+    adapter = _RecordingAdapter()
+
+    arbiter = CommandArbiter(journal)
+    arbiter.execute(adapter, result, now)
+    with pytest.raises(PermissionError, match="already been consumed"):
+        arbiter.execute(adapter, result, now)
+    with pytest.raises(PermissionError, match="already been consumed"):
+        CommandArbiter(journal).execute(adapter, result, now)
+
+    events = journal.read_all()
+    assert [event["event_type"] for event in events] == [
+        "command_execution_started",
+        "command_executed",
+        "command_rejected",
+        "command_rejected",
+    ]
+
+
+def test_expired_command_and_mismatched_receipt_fail_closed(tmp_path):
+    mission, state, proposal, now = _runtime_inputs()
+    result = OperationalSafetySupervisor().authorise(proposal, state, mission, now)
+    journal = JsonlAuditJournal(tmp_path / "audit.jsonl")
+
+    with pytest.raises(PermissionError, match="has expired"):
+        CommandArbiter(journal).execute(_RecordingAdapter(), result, proposal.expires_at)
+
+    fresh_result = OperationalSafetySupervisor().authorise(proposal, state, mission, now)
+    with pytest.raises(RuntimeError, match="does not match"):
+        CommandArbiter(journal).execute(_MismatchedReceiptAdapter(), fresh_result, now)
+    with pytest.raises(PermissionError, match="already been consumed"):
+        CommandArbiter(journal).execute(_RecordingAdapter(), fresh_result, now)
+
+
 def test_control_loop_records_proposal_safety_and_command(tmp_path):
     mission, state, proposal, now = _runtime_inputs()
     journal = JsonlAuditJournal(tmp_path / "audit.jsonl")
@@ -119,6 +174,7 @@ def test_control_loop_records_proposal_safety_and_command(tmp_path):
     assert [event["event_type"] for event in journal.read_all()] == [
         "intent_proposed",
         "safety_decision",
+        "command_execution_started",
         "command_executed",
     ]
 

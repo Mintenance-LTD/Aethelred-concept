@@ -34,6 +34,7 @@ def test_authenticated_intent_is_verified_before_safety_and_execution(tmp_path) 
         "intent_authenticated",
         "intent_proposed",
         "safety_decision",
+        "command_execution_started",
         "command_executed",
     ]
 
