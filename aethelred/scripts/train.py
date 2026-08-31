@@ -161,7 +161,8 @@ def train(
             config.simulation.threats.max_threats = 20
             config.simulation.threats.spawn_interval = 20
 
-    # Track best results
+    # Track best observed reward separately from checkpoint selection.  The
+    # selectable checkpoint uses the rolling aggregate below, not one episode.
     best_reward = float("-inf")
     best_survival = 0.0
 
@@ -294,18 +295,24 @@ def train(
             steps=step + 1,
         )
 
-        # Checkpoint on best reward
-        if episode_reward > best_reward:
-            best_reward = episode_reward
+        best_reward = max(best_reward, episode_reward)
+        rolling_reward = trainer.metrics.avg_reward
+
+        # Checkpoint selection is based on the running evaluation aggregate,
+        # avoiding promotion of a model solely because of one lucky rollout.
+        if trainer.checkpoint_mgr.is_improved(rolling_reward):
             trainer.checkpoint_mgr.save(
                 policy, episode, episode_reward,
                 metrics={
                     "survival_rate": survival_rate,
                     "losses": episode_losses,
                     "adaptations": episode_adaptations,
+                    "rolling_reward_100": rolling_reward,
                 },
                 value_head=trainer.value_head,
                 optimizer=trainer.optimizer,
+                selection_score=rolling_reward,
+                selection_metric="rolling_reward_100",
             )
 
         best_survival = max(best_survival, survival_rate)

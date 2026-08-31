@@ -90,3 +90,34 @@ def test_root_device_is_propagated_to_trainer_device():
     config = AethelredConfig._from_dict({"device": "cuda"})
     assert config.device == "cuda"
     assert config.training.device == "cuda"
+
+
+def test_yaml_config_requires_supported_schema_version(tmp_path):
+    missing_version = tmp_path / "missing-version.yaml"
+    missing_version.write_text("device: cpu\n", encoding="utf-8")
+    unsupported_version = tmp_path / "unsupported-version.yaml"
+    unsupported_version.write_text("schema_version: 2\ndevice: cpu\n", encoding="utf-8")
+    supported_version = tmp_path / "supported-version.yaml"
+    supported_version.write_text("schema_version: 1\ndevice: cpu\n", encoding="utf-8")
+
+    with pytest.raises(ConfigurationError, match="declare schema_version"):
+        AethelredConfig.from_yaml(missing_version)
+    with pytest.raises(ConfigurationError, match="Unsupported configuration schema_version"):
+        AethelredConfig.from_yaml(unsupported_version)
+
+    assert AethelredConfig.from_yaml(supported_version).schema_version == 1
+
+
+@pytest.mark.parametrize(
+    ("data", "message"),
+    [
+        ({"simulation": {"physics": {"hit_probability_base": 1.1}}}, "between 0 and 1"),
+        ({"simulation": {"threats": {"initial_threats": 11, "max_threats": 10}}}, "initial_threats"),
+        ({"tactical_ai": {"hidden_dim": 250, "num_heads": 8}}, "divisible"),
+        ({"tactical_ai": {"state_embed_dim": 128}}, "state_embed_dim must match"),
+        ({"training": {"gamma": -0.1}}, "between 0 and 1"),
+    ],
+)
+def test_config_rejects_unsafe_numeric_and_structural_values(data, message):
+    with pytest.raises(ConfigurationError, match=message):
+        AethelredConfig._from_dict(data)

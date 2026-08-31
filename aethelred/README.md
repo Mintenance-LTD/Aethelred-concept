@@ -91,6 +91,12 @@ only its `AuthorisedCommand` can pass through `CommandArbiter` to an adapter.
 decision-only execution path and maps every allowed operational capability to a
 non-offensive simulator action.
 
+For a production-facing entry point, `AuthenticatedOperationalControlLoop`
+requires an `AuthenticatedIntent` validated by `IntentAuthenticator` before the
+proposal reaches the safety supervisor. The envelope is HMAC-authenticated,
+short-lived, and replay-resistant; it is still only an intent and never bypasses
+mission or safety authorisation.
+
 ## Offline adaptation boundary
 
 `LearningLoop` may derive an `OfflineAdaptationCandidate` from simulated loss
@@ -105,12 +111,58 @@ baseline on required metrics, recorded passing safety checks, a matching model
 manifest/report hash, and a named human approval. It creates an approval record
 only—it does not load a model or dispatch any command.
 
+`HeldOutEvaluator` runs the same declared scenario set for a candidate and its
+baseline, aggregates comparable metrics and safety outcomes, and writes a
+canonical evaluation report. The report's SHA-256 is calculated from its exact
+persisted bytes and is therefore directly usable by `ModelManifest` and the
+promotion gate.
+
 `ReleaseLedger` records approved release registration, activation, and rollback
 events to the durable JSONL audit journal. A rollback can target only a
 previously approved release and requires a named operator plus rationale; it
 updates release governance state only, never an active runtime model.
 On startup the ledger replays and validates the journal, restoring the active
 release and failing closed if release identifiers or lifecycle history conflict.
+Every audit event is hash-chained to its predecessor, so replay also fails
+closed when a persisted event is altered, deleted from the middle of the log, or
+otherwise breaks the recorded sequence.
+
+At the final execution boundary, each authorised command is short-lived and
+single-use. The arbiter rejects expired or replayed command IDs before calling
+an adapter, records dispatch before invoking that adapter, reconstructs consumed
+IDs from the verified journal after restart, and rejects acknowledgements that
+do not identify the same command.
+
+Each `Mission` also carries finite, closed `OperatingArea` bounds. The runtime
+authoriser rejects a proposal when its current vehicle position or requested
+target lies outside that approved area, independently of simulator geofencing.
+
+For the authenticated operational loop, each mission also names its authorised
+intent issuers. A valid HMAC alone is insufficient: a signed proposal from an
+issuer outside the mission allowlist is journalled and rejected before safety
+authorisation or execution.
+
+`OperationalControlLoop.submit` rejects raw policy proposals. Production callers
+must use `AuthenticatedOperationalControlLoop`, which verifies the signed envelope
+and issuer binding before the loop records a safety decision or reaches an adapter.
+
+`WorldState` includes battery reserve, localisation quality, sensor timestamp,
+communications health, operator-link status, and runtime health. The safety
+supervisor rejects stale, non-finite, unhealthy, low-localisation, or unsafe-link
+state; low battery and lost links permit only `HOLD` or `RETURN_HOME` intents.
+Every verified proposal writes a hash-chained `telemetry_observed` record before
+its intent and safety-decision records, preserving the exact operational snapshot
+considered by the authoriser.
+
+`MissionRegistry` persists operator-accountable mission registrations and their
+strictly increasing revisions in the same hash-chained journal. The authenticated
+loop rejects unknown or superseded mission objects before it verifies an envelope
+or reaches the safety supervisor.
+
+`ActiveReleaseVerifier` is the runtime artefact boundary: it requires an active
+ledger registration and compares the exact model digest, filename, code revision,
+canonical runtime configuration, observation schema, and runtime target before it
+will call a supplied model loader.
 
 ## Status / recent fixes
 
@@ -159,12 +211,12 @@ python scripts/train.py --config configs/survival_train.yaml --episodes 120 --no
 Notes learned along the way: the default *composite* reward (survival + objectives +
 kills − losses) is not the same as survival, so naive training won't raise survival;
 a sharp `loss_penalty` plus strong `entropy_coef` (exploration) is needed for PPO to
-discover the evade/withdraw behavior. Checkpoints are selected by single-episode reward,
-which is noisy — the latest checkpoint is often a better survival policy than `best_policy.pt`.
+discover the evade/withdraw behavior. The trainer selects `best_policy.pt` by
+rolling reward over its most recent 100 episodes; release promotion separately
+requires held-out evidence.
 
-### Known remaining work (design notes, not bugs)
+### Remaining deployment-context work
 
-- `ModelExporter` uses `torch.jit.trace`, which bakes in trace-time control flow;
-  revisit if exporting models with heavily data-dependent branching.
-- Checkpoint selection is by single-episode reward; an eval-based or running-average
-  criterion would pick more reliable policies.
+- Hardware-in-the-loop validation, actuator protocol integration, and credential
+  management need an authorized target platform and operational environment; they
+  are deliberately not simulated as real-world deployment claims in this repository.

@@ -225,13 +225,13 @@ class TrainingMetrics:
 
 
 class CheckpointManager:
-    """Manages model checkpoints during training."""
+    """Manages recoverable and selection-scored model checkpoints during training."""
 
     def __init__(self, checkpoint_dir: str = "checkpoints", keep_last: int = 5) -> None:
         self.checkpoint_dir = Path(checkpoint_dir)
         self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
         self.keep_last = keep_last
-        self._best_reward = float("-inf")
+        self._best_selection_score = float("-inf")
         self._checkpoints: list[Path] = []
 
     def save(
@@ -242,8 +242,20 @@ class CheckpointManager:
         metrics: dict,
         value_head: nn.Module | None = None,
         optimizer: torch.optim.Optimizer | None = None,
+        selection_score: float | None = None,
+        selection_metric: str | None = None,
     ) -> Path:
-        """Save a checkpoint."""
+        """Save a recoverable checkpoint and, when improved, the selected model.
+
+        ``selection_score`` must come from an evaluation aggregate rather than
+        the current episode's reward.  Periodic recovery checkpoints can omit
+        it and can therefore never replace ``best_policy.pt`` by accident.
+        """
+        if selection_score is not None:
+            if not math.isfinite(selection_score):
+                raise ValueError("Checkpoint selection score must be finite")
+            if not selection_metric or not selection_metric.strip():
+                raise ValueError("Checkpoint selection metric is required")
         checkpoint = {
             "episode": episode,
             "reward": reward,
@@ -257,6 +269,11 @@ class CheckpointManager:
                 "num_layers": policy.config.num_layers,
             },
         }
+        if selection_score is not None:
+            checkpoint["selection"] = {
+                "metric": selection_metric,
+                "score": selection_score,
+            }
         if value_head is not None:
             checkpoint["value_head"] = value_head.state_dict()
         if optimizer is not None:
@@ -266,12 +283,17 @@ class CheckpointManager:
         torch.save(checkpoint, path)
         self._checkpoints.append(path)
 
-        # Save best
-        if reward > self._best_reward:
-            self._best_reward = reward
+        # Keep the promoted training checkpoint distinct from one-off rewards.
+        if selection_score is not None and selection_score > self._best_selection_score:
+            self._best_selection_score = selection_score
             best_path = self.checkpoint_dir / "best_policy.pt"
             torch.save(checkpoint, best_path)
-            logger.info(f"New best policy: reward={reward:.2f}")
+            logger.info(
+                "New best policy: %s=%.4f (episode_reward=%.2f)",
+                selection_metric,
+                selection_score,
+                reward,
+            )
 
         # Prune old checkpoints
         while len(self._checkpoints) > self.keep_last:
@@ -280,6 +302,12 @@ class CheckpointManager:
                 old.unlink()
 
         return path
+
+    def is_improved(self, selection_score: float) -> bool:
+        """Return whether a finite aggregate evaluation would replace the best model."""
+        if not math.isfinite(selection_score):
+            raise ValueError("Checkpoint selection score must be finite")
+        return selection_score > self._best_selection_score
 
     def load_best(self, policy: TacticalPolicy, device: str = "cpu") -> dict:
         """Load the best checkpoint."""

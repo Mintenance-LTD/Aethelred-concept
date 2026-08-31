@@ -16,6 +16,7 @@ from aethelred.runtime.operational import (
     IntentProposal,
     Mission,
     MissionCapability,
+    OperatingArea,
     OperationalControlLoop,
     OperationalSafetySupervisor,
     WorldState,
@@ -30,6 +31,11 @@ class _RecordingAdapter:
     def execute(self, command):
         self.command_id = command.command_id
         return CommandReceipt(command_id=command.command_id, accepted=True, recorded_at=datetime.now(UTC))
+
+
+class _MismatchedReceiptAdapter:
+    def execute(self, command):
+        return CommandReceipt(command_id=uuid4(), accepted=True, recorded_at=datetime.now(UTC))
 
 
 class _RecordingSimulation:
@@ -60,6 +66,8 @@ def _runtime_inputs() -> tuple[Mission, WorldState, IntentProposal, datetime]:
         valid_until=now + timedelta(minutes=1),
         allowed_capabilities=frozenset({MissionCapability.SURVEY, MissionCapability.HOLD}),
         assigned_vehicle_ids=frozenset({"vehicle-1"}),
+        operating_area=OperatingArea(minimum=Vec2(x=0.0, y=0.0), maximum=Vec2(x=500.0, y=500.0)),
+        authorised_issuer_ids=frozenset({"planner-service"}),
     )
     state = WorldState(
         revision=4,
@@ -68,6 +76,12 @@ def _runtime_inputs() -> tuple[Mission, WorldState, IntentProposal, datetime]:
         position=Vec2(x=50.0, y=50.0),
         healthy=True,
         navigation_valid=True,
+        battery_reserve=0.80,
+        localisation_quality=0.95,
+        sensor_observed_at=now,
+        communications_healthy=True,
+        operator_link_active=True,
+        runtime_healthy=True,
     )
     proposal = IntentProposal(
         proposal_id=uuid4(),
@@ -94,8 +108,11 @@ def test_only_authorised_command_reaches_adapter(tmp_path):
     assert result.outcome is AuthorisationOutcome.AUTHORISED
     assert adapter.command_id == receipt.command_id
     events = journal.read_all()
-    assert events[0]["event_type"] == "command_executed"
-    assert events[0]["payload"]["accepted"]
+    assert [event["event_type"] for event in events] == [
+        "command_execution_started",
+        "command_executed",
+    ]
+    assert events[1]["payload"]["accepted"]
 
 
 def test_stale_or_disallowed_proposals_cannot_execute():
@@ -109,17 +126,133 @@ def test_stale_or_disallowed_proposals_cannot_execute():
         CommandArbiter().execute(_RecordingAdapter(), result)
 
 
-def test_control_loop_records_proposal_safety_and_command(tmp_path):
+def test_future_state_cannot_be_authorised():
+    mission, state, proposal, now = _runtime_inputs()
+    future_state = WorldState(**{**state.__dict__, "observed_at": now + timedelta(seconds=1)})
+
+    result = OperationalSafetySupervisor().authorise(proposal, future_state, mission, now)
+
+    assert result.outcome is AuthorisationOutcome.REJECTED
+    assert result.rule_ids == ("state_timestamp",)
+
+
+def test_operating_area_rejects_outside_state_or_target():
+    mission, state, proposal, now = _runtime_inputs()
+    outside_target = IntentProposal(**{**proposal.__dict__, "target_position": Vec2(x=501.0, y=100.0)})
+    outside_state = WorldState(**{**state.__dict__, "position": Vec2(x=-1.0, y=50.0)})
+
+    target_result = OperationalSafetySupervisor().authorise(outside_target, state, mission, now)
+    state_result = OperationalSafetySupervisor().authorise(proposal, outside_state, mission, now)
+
+    assert target_result.rule_ids == ("target_operating_area",)
+    assert state_result.rule_ids == ("state_operating_area",)
+
+
+def test_operating_area_rejects_invalid_bounds_and_non_finite_positions():
+    with pytest.raises(ValueError, match="minimum"):
+        OperatingArea(minimum=Vec2(x=2.0, y=0.0), maximum=Vec2(x=1.0, y=1.0))
+    area = OperatingArea(minimum=Vec2(x=0.0, y=0.0), maximum=Vec2(x=1.0, y=1.0))
+    assert not area.contains(Vec2(x=float("nan"), y=0.0))
+
+
+@pytest.mark.parametrize(
+    ("changes", "expected_rule"),
+    [
+        ({"battery_reserve": 0.19}, "battery_reserve"),
+        ({"localisation_quality": 0.74}, "localisation_quality"),
+        ({"sensor_observed_at": datetime.now(UTC) - timedelta(seconds=2)}, "sensor_freshness"),
+        ({"communications_healthy": False}, "operator_link"),
+        ({"operator_link_active": False}, "operator_link"),
+        ({"runtime_healthy": False}, "runtime_health"),
+        ({"battery_reserve": float("nan")}, "telemetry_values"),
+    ],
+)
+def test_runtime_health_constraints_fail_closed(changes, expected_rule):
+    mission, state, proposal, now = _runtime_inputs()
+    if "sensor_observed_at" in changes:
+        changes = {**changes, "sensor_observed_at": now - timedelta(seconds=2)}
+    constrained_state = WorldState(**{**state.__dict__, **changes})
+
+    result = OperationalSafetySupervisor().authorise(proposal, constrained_state, mission, now)
+
+    assert result.outcome is AuthorisationOutcome.REJECTED
+    assert result.rule_ids == (expected_rule,)
+
+
+def test_low_reserve_and_lost_link_allow_return_home_or_hold():
+    mission, state, proposal, now = _runtime_inputs()
+    constrained_state = WorldState(
+        **{
+            **state.__dict__,
+            "battery_reserve": 0.19,
+            "communications_healthy": False,
+            "operator_link_active": False,
+        }
+    )
+    return_proposal = IntentProposal(
+        **{**proposal.__dict__, "capability": MissionCapability.RETURN_HOME}
+    )
+    permitted_mission = Mission(
+        **{
+            **mission.__dict__,
+            "allowed_capabilities": frozenset({MissionCapability.RETURN_HOME}),
+        }
+    )
+
+    result = OperationalSafetySupervisor().authorise(
+        return_proposal, constrained_state, permitted_mission, now
+    )
+
+    assert result.outcome is AuthorisationOutcome.AUTHORISED
+
+
+def test_command_expiry_replay_and_restart_are_rejected(tmp_path):
+    mission, state, proposal, now = _runtime_inputs()
+    result = OperationalSafetySupervisor().authorise(proposal, state, mission, now)
+    journal = JsonlAuditJournal(tmp_path / "audit.jsonl")
+    adapter = _RecordingAdapter()
+
+    arbiter = CommandArbiter(journal)
+    arbiter.execute(adapter, result, now)
+    with pytest.raises(PermissionError, match="already been consumed"):
+        arbiter.execute(adapter, result, now)
+    with pytest.raises(PermissionError, match="already been consumed"):
+        CommandArbiter(journal).execute(adapter, result, now)
+
+    events = journal.read_all()
+    assert [event["event_type"] for event in events] == [
+        "command_execution_started",
+        "command_executed",
+        "command_rejected",
+        "command_rejected",
+    ]
+
+
+def test_expired_command_and_mismatched_receipt_fail_closed(tmp_path):
+    mission, state, proposal, now = _runtime_inputs()
+    result = OperationalSafetySupervisor().authorise(proposal, state, mission, now)
+    journal = JsonlAuditJournal(tmp_path / "audit.jsonl")
+
+    with pytest.raises(PermissionError, match="has expired"):
+        CommandArbiter(journal).execute(_RecordingAdapter(), result, proposal.expires_at)
+
+    fresh_result = OperationalSafetySupervisor().authorise(proposal, state, mission, now)
+    with pytest.raises(RuntimeError, match="does not match"):
+        CommandArbiter(journal).execute(_MismatchedReceiptAdapter(), fresh_result, now)
+    with pytest.raises(PermissionError, match="already been consumed"):
+        CommandArbiter(journal).execute(_RecordingAdapter(), fresh_result, now)
+
+
+def test_raw_control_loop_rejects_unauthenticated_proposal(tmp_path):
     mission, state, proposal, now = _runtime_inputs()
     journal = JsonlAuditJournal(tmp_path / "audit.jsonl")
     loop = OperationalControlLoop(OperationalSafetySupervisor(), journal)
 
-    loop.submit(proposal, state, mission, _RecordingAdapter(), now)
+    with pytest.raises(PermissionError, match="authenticated envelope"):
+        loop.submit(proposal, state, mission, _RecordingAdapter(), now)
 
     assert [event["event_type"] for event in journal.read_all()] == [
-        "intent_proposed",
-        "safety_decision",
-        "command_executed",
+        "unauthenticated_intent_rejected",
     ]
 
 

@@ -20,8 +20,11 @@ class DecisionTransformer(nn.Module):
 
     def __init__(self, config: DecisionTransformerConfig) -> None:
         super().__init__()
-        self.config = config
         hidden_dim = config.hidden_dim
+        # Keep scalar architecture values TorchScript-compatible.  Retaining a
+        # dataclass config as a module attribute prevents scripting the model.
+        self.hidden_dim = hidden_dim
+        self.max_episode_length = config.max_episode_length
 
         # Embedding layers for each token type
         self.state_embed = nn.Linear(config.state_embed_dim, hidden_dim)
@@ -105,7 +108,7 @@ class DecisionTransformer(nn.Module):
         return_embeds = self.return_embed(returns_to_go)  # (B, T, H)
 
         # Add timestep embeddings
-        timesteps_clamped = timesteps.clamp(0, self.config.max_episode_length - 1)
+        timesteps_clamped = timesteps.clamp(0, self.max_episode_length - 1)
         time_embeds = self.timestep_embed(timesteps_clamped)  # (B, T, H)
         state_embeds = state_embeds + time_embeds
         action_embeds = action_embeds + time_embeds
@@ -116,7 +119,7 @@ class DecisionTransformer(nn.Module):
         stacked = torch.stack(
             [return_embeds, state_embeds, action_embeds], dim=2
         )  # (B, T, 3, H)
-        sequence = stacked.reshape(batch_size, 3 * seq_len, self.config.hidden_dim)
+        sequence = stacked.reshape(batch_size, 3 * seq_len, self.hidden_dim)
 
         # Add token type embeddings
         token_types = torch.tensor(
@@ -131,12 +134,12 @@ class DecisionTransformer(nn.Module):
         causal_mask = self._generate_causal_mask(3 * seq_len, device)
 
         # Build padding mask from attention_mask
-        src_key_padding_mask = None
+        src_key_padding_mask: torch.Tensor | None = None
         if attention_mask is not None:
             # Expand mask from (B, T) to (B, 3T) — each timestep has 3 tokens
             expanded = attention_mask.unsqueeze(-1).expand(-1, -1, 3)
             expanded = expanded.reshape(batch_size, 3 * seq_len)
-            src_key_padding_mask = ~expanded.bool()
+            src_key_padding_mask = ~expanded.to(torch.bool)
 
         # Transformer forward
         hidden = self.transformer(

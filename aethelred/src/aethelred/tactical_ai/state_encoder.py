@@ -109,7 +109,7 @@ class EntityEncoder(nn.Module):
         query = self.pool_query.expand(batch_size, -1, -1)  # (B, 1, D)
 
         # Attention pooling - key_padding_mask expects True for positions to IGNORE
-        key_padding_mask = ~mask.bool()  # invert: True = pad position
+        key_padding_mask = ~mask.to(torch.bool)  # invert: True = pad position
 
         # If a row has NO valid entities (e.g. all threats neutralized), masking
         # every key makes attention softmax over all -inf -> NaN. Let those rows

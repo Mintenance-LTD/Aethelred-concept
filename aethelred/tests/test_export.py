@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import torch
 
-from aethelred.deployment.exporter import ModelExporter, _create_dummy_obs
+from aethelred.deployment.exporter import ModelExporter, _create_dummy_obs, _InferenceWrapper
 from aethelred.tactical_ai.policy import TacticalPolicy
 
 
@@ -21,6 +21,18 @@ def test_torchscript_export_roundtrip(tmp_path):
     dummy = _create_dummy_obs(torch.device("cpu"))
     out = loaded(*dummy)
     assert len(out) == 5  # action_type, target_x, target_y, priority, formation
+
+
+def test_inference_wrapper_is_torchscript_scriptable():
+    """Scripting retains tensor-dependent control flow that tracing could freeze."""
+    policy = TacticalPolicy.build()
+    wrapper = _InferenceWrapper(policy)
+    wrapper.set_to_inference_mode()
+
+    scripted = torch.jit.script(wrapper)
+    out = scripted(*_create_dummy_obs(torch.device("cpu")))
+
+    assert len(out) == 5
 
 
 def test_latency_profile_runs(tmp_path):

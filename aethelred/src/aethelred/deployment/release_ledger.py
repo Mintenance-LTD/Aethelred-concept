@@ -55,6 +55,12 @@ class ReleaseLedger:
         """Return the currently declared approved release, if any."""
         return self._active_release_id
 
+    def active_registration(self) -> ReleaseRegistration:
+        """Return the sole active approved release, or fail closed if absent."""
+        if self._active_release_id is None:
+            raise PromotionError("No approved release is active")
+        return self._get_registered(self._active_release_id)
+
     def register(self, approved_release: ApprovedModelRelease) -> ReleaseRegistration:
         """Register a release that has already passed promotion approval."""
         release_id = self._release_id(approved_release)

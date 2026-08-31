@@ -1,5 +1,11 @@
 """Deployment safety, export, and model-governance components."""
 
+from aethelred.deployment.evaluation import (
+    EvaluationReport,
+    EvaluationScenario,
+    HeldOutEvaluator,
+    ScenarioResult,
+)
 from aethelred.deployment.model_manifest import ModelManifest
 from aethelred.deployment.promotion import (
     ApprovedModelRelease,
@@ -10,16 +16,31 @@ from aethelred.deployment.promotion import (
     PromotionPolicy,
 )
 from aethelred.deployment.release_ledger import ReleaseLedger, ReleaseRegistration, RollbackRecord
+from aethelred.deployment.release_verifier import (
+    ActiveReleaseVerifier,
+    ReleaseVerificationError,
+    VerifiedReleaseArtifact,
+)
+from aethelred.deployment.release_workflow import ReleasePreparation, ReleasePreparationWorkflow
 
 __all__ = [
+    "ActiveReleaseVerifier",
     "ApprovedModelRelease",
+    "EvaluationReport",
+    "EvaluationScenario",
     "HeldOutEvaluation",
+    "HeldOutEvaluator",
     "HumanApproval",
     "ModelManifest",
     "ModelPromotionGate",
     "PromotionError",
     "PromotionPolicy",
     "ReleaseLedger",
+    "ReleasePreparation",
+    "ReleasePreparationWorkflow",
     "ReleaseRegistration",
+    "ReleaseVerificationError",
     "RollbackRecord",
+    "ScenarioResult",
+    "VerifiedReleaseArtifact",
 ]

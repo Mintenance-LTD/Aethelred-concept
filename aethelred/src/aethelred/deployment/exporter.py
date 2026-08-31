@@ -81,14 +81,16 @@ class ModelExporter:
         # Generate dummy input
         dummy = _create_dummy_obs(policy.device)
 
-        # Script the model. check_trace is disabled because attention introduces
-        # tiny (~1e-5) numerical reordering that trips the built-in re-run check;
-        # the export round-trip test validates correctness instead.
+        # Script first so data-dependent tensor control flow remains part of the
+        # deployment artefact.  Some older/custom PyTorch builds may not script
+        # every supported operator, so tracing remains an explicit fallback.
         try:
-            scripted = torch.jit.trace(wrapper, dummy, check_trace=False)
-        except (RuntimeError, ValueError):
-            logger.warning("Tracing failed, falling back to scripting")
             scripted = torch.jit.script(wrapper)
+        except (RuntimeError, ValueError):
+            logger.warning("TorchScript scripting failed, falling back to tracing")
+            # Attention can introduce tiny numerical reordering that trips the
+            # built-in re-run check; round-trip tests validate the fallback.
+            scripted = torch.jit.trace(wrapper, dummy, check_trace=False)
 
         path = self.output_dir / f"{name}.pt"
         scripted.save(str(path))
@@ -275,7 +277,7 @@ class _InferenceWrapper(nn.Module):
         super().__init__()
         self.encoder = policy.state_encoder
         self.transformer = policy.transformer
-        self.config = policy.config
+        self.action_embed_dim = policy.config.action_embed_dim
 
     def set_to_inference_mode(self) -> None:
         """Set all sub-modules to inference mode."""
@@ -309,7 +311,7 @@ class _InferenceWrapper(nn.Module):
         # Build minimal sequence (single timestep)
         states = state_embed.unsqueeze(1)  # (B, 1, D)
         actions = torch.zeros(
-            state_embed.shape[0], 1, self.config.action_embed_dim,
+            state_embed.shape[0], 1, self.action_embed_dim,
             device=state_embed.device,
         )
         rtg = torch.ones(
