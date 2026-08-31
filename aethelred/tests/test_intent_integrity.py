@@ -9,14 +9,26 @@ import pytest
 
 from aethelred.runtime.audit import JsonlAuditJournal
 from aethelred.runtime.integrity import IntegrityError, IntentAuthenticator
-from aethelred.runtime.lifecycle import RuntimeLifecycleSupervisor
+from aethelred.runtime.lifecycle import RuntimeLifecycleState, RuntimeLifecycleSupervisor
 from aethelred.runtime.missions import MissionRegistry
 from aethelred.runtime.operational import (
     AuthenticatedOperationalControlLoop,
+    CommandExecutionError,
+    CommandReceipt,
     OperationalControlLoop,
     OperationalSafetySupervisor,
 )
 from tests.test_operational_runtime import _RecordingAdapter, _runtime_inputs
+
+
+class _NackAdapter:
+    def execute(self, command):
+        return CommandReceipt(
+            command_id=command.command_id,
+            accepted=False,
+            recorded_at=command.expires_at,
+            detail="vehicle rejected command",
+        )
 
 
 def _active_lifecycle(journal, mission):
@@ -172,3 +184,22 @@ def test_authenticated_loop_rejects_an_authenticator_on_another_journal(tmp_path
 
     with pytest.raises(TypeError, match="share one audit journal"):
         loop.submit(envelope, state, mission, _RecordingAdapter(), now)
+
+
+def test_adapter_nack_transitions_active_runtime_to_safe_state(tmp_path) -> None:
+    mission, state, proposal, now = _runtime_inputs()
+    journal = JsonlAuditJournal(tmp_path / "audit.jsonl")
+    authenticator = IntentAuthenticator(b"a" * 32, journal)
+    envelope = authenticator.sign(proposal, "planner-service", issued_at=now)
+    registry = MissionRegistry(journal)
+    registry.register(mission, "operator@example.test", "Approved non-offensive mission")
+    lifecycle = _active_lifecycle(journal, mission)
+    loop = AuthenticatedOperationalControlLoop(
+        OperationalControlLoop(OperationalSafetySupervisor(), journal), authenticator, registry, lifecycle
+    )
+
+    with pytest.raises(CommandExecutionError, match="negatively acknowledged"):
+        loop.submit(envelope, state, mission, _NackAdapter(), now)
+
+    assert lifecycle.state is RuntimeLifecycleState.SAFE_STATE
+    assert journal.read_all()[-1]["payload"]["event"] == "safe_state_entered"

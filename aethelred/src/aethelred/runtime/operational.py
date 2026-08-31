@@ -156,6 +156,10 @@ class CommandReceipt:
     detail: str = ""
 
 
+class CommandExecutionError(RuntimeError):
+    """Raised when an adapter cannot provide a valid positive acknowledgement."""
+
+
 class AuthorisedCommandExecutor(Protocol):
     """An adapter can execute only a safety-authorised command."""
 
@@ -322,10 +326,33 @@ class CommandArbiter:
             receipt = executor.execute(command)
         except Exception as error:
             self._record_rejection(str(command.command_id), f"Adapter execution failed: {error}")
-            raise
+            raise CommandExecutionError("Adapter execution failed") from error
+        if not isinstance(receipt, CommandReceipt):
+            self._record_rejection(str(command.command_id), "Adapter returned an invalid receipt")
+            raise CommandExecutionError("Adapter returned an invalid receipt")
         if receipt.command_id != command.command_id:
             self._record_rejection(str(command.command_id), "Adapter receipt command ID does not match")
-            raise RuntimeError("Adapter receipt command ID does not match authorised command")
+            raise CommandExecutionError("Adapter receipt command ID does not match authorised command")
+        if receipt.recorded_at.tzinfo is None:
+            self._record_rejection(str(command.command_id), "Adapter receipt time must be timezone-aware")
+            raise CommandExecutionError("Adapter receipt time must be timezone-aware")
+        if type(receipt.accepted) is not bool:
+            self._record_rejection(str(command.command_id), "Adapter receipt acceptance must be boolean")
+            raise CommandExecutionError("Adapter receipt acceptance must be boolean")
+        if not receipt.accepted:
+            if self._journal is not None:
+                self._journal.record(
+                    "command_nacked",
+                    correlation_id=str(command.command_id),
+                    payload={
+                        "proposal_id": str(command.proposal_id),
+                        "mission_id": str(command.mission_id),
+                        "vehicle_id": command.vehicle_id,
+                        "capability": command.capability.value,
+                        "detail": receipt.detail,
+                    },
+                )
+            raise CommandExecutionError("Adapter negatively acknowledged authorised command")
         if self._journal is not None:
             self._journal.record(
                 "command_executed",
@@ -540,6 +567,8 @@ class AuthenticatedOperationalControlLoop:
             correlation_id=str(proposal.proposal_id),
             payload={"issuer_id": envelope.issuer_id, "nonce": envelope.nonce},
         )
-        return self._control_loop._submit_verified(
-            proposal, state, registered_mission, executor, now
-        )
+        try:
+            return self._control_loop._submit_verified(proposal, state, registered_mission, executor, now)
+        except CommandExecutionError as error:
+            self._lifecycle.enter_safe_state(f"Command adapter failure: {error}")
+            raise

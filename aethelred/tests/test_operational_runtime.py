@@ -12,6 +12,7 @@ from aethelred.runtime.audit import JsonlAuditJournal
 from aethelred.runtime.operational import (
     AuthorisationOutcome,
     CommandArbiter,
+    CommandExecutionError,
     CommandReceipt,
     IntentProposal,
     Mission,
@@ -36,6 +37,20 @@ class _RecordingAdapter:
 class _MismatchedReceiptAdapter:
     def execute(self, command):
         return CommandReceipt(command_id=uuid4(), accepted=True, recorded_at=datetime.now(UTC))
+
+
+class _NackAdapter:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def execute(self, command):
+        self.calls += 1
+        return CommandReceipt(
+            command_id=command.command_id,
+            accepted=False,
+            recorded_at=datetime.now(UTC),
+            detail="vehicle controller rejected command",
+        )
 
 
 class _RecordingSimulation:
@@ -124,6 +139,26 @@ def test_stale_or_disallowed_proposals_cannot_execute():
     assert result.command is None
     with pytest.raises(PermissionError):
         CommandArbiter().execute(_RecordingAdapter(), result)
+
+
+def test_nacked_command_is_audited_and_cannot_be_reissued(tmp_path):
+    mission, state, proposal, now = _runtime_inputs()
+    result = OperationalSafetySupervisor().authorise(proposal, state, mission, now)
+    journal = JsonlAuditJournal(tmp_path / "audit.jsonl")
+    arbiter = CommandArbiter(journal)
+    adapter = _NackAdapter()
+
+    with pytest.raises(CommandExecutionError, match="negatively acknowledged"):
+        arbiter.execute(adapter, result, now)
+    with pytest.raises(PermissionError, match="already been consumed"):
+        arbiter.execute(adapter, result, now)
+
+    assert adapter.calls == 1
+    assert [event["event_type"] for event in journal.read_all()] == [
+        "command_execution_started",
+        "command_nacked",
+        "command_rejected",
+    ]
 
 
 def test_future_state_cannot_be_authorised():
