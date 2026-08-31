@@ -35,6 +35,7 @@ class SimulatorCommandAdapter:
                 command_id=command.command_id,
                 accepted=False,
                 recorded_at=datetime.now(UTC),
+                sequence=command.sequence,
                 detail="Simulator has no current world state",
             )
 
@@ -56,6 +57,7 @@ class SimulatorCommandAdapter:
             command_id=command.command_id,
             accepted=True,
             recorded_at=datetime.now(UTC),
+            sequence=command.sequence,
             detail="Executed through simulator decision interface",
         )
 

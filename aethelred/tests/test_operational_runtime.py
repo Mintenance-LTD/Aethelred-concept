@@ -29,15 +29,24 @@ from aethelred.runtime.simulator_adapter import SimulatorCommandAdapter
 class _RecordingAdapter:
     def __init__(self) -> None:
         self.command_id = None
+        self.sequence = None
 
     def execute(self, command):
         self.command_id = command.command_id
-        return CommandReceipt(command_id=command.command_id, accepted=True, recorded_at=datetime.now(UTC))
+        self.sequence = command.sequence
+        return CommandReceipt(
+            command_id=command.command_id,
+            accepted=True,
+            recorded_at=datetime.now(UTC),
+            sequence=command.sequence,
+        )
 
 
 class _MismatchedReceiptAdapter:
     def execute(self, command):
-        return CommandReceipt(command_id=uuid4(), accepted=True, recorded_at=datetime.now(UTC))
+        return CommandReceipt(
+            command_id=uuid4(), accepted=True, recorded_at=datetime.now(UTC), sequence=command.sequence
+        )
 
 
 class _NackAdapter:
@@ -50,7 +59,18 @@ class _NackAdapter:
             command_id=command.command_id,
             accepted=False,
             recorded_at=datetime.now(UTC),
+            sequence=command.sequence,
             detail="vehicle controller rejected command",
+        )
+
+
+class _WrongSequenceAdapter:
+    def execute(self, command):
+        return CommandReceipt(
+            command_id=command.command_id,
+            accepted=True,
+            recorded_at=datetime.now(UTC),
+            sequence=command.sequence + 1,
         )
 
 
@@ -168,6 +188,37 @@ def test_nacked_command_is_audited_and_cannot_be_reissued(tmp_path):
         "command_nacked",
         "command_rejected",
     ]
+
+
+def test_command_sequences_increase_per_vehicle_and_recover_from_journal(tmp_path):
+    mission, state, proposal, now = _runtime_inputs()
+    supervisor = OperationalSafetySupervisor()
+    journal = JsonlAuditJournal(tmp_path / "audit.jsonl")
+    adapter = _RecordingAdapter()
+    arbiter = CommandArbiter(journal)
+
+    arbiter.execute(adapter, supervisor.authorise(proposal, state, mission, now), now)
+    first_sequence = adapter.sequence
+    arbiter.execute(adapter, supervisor.authorise(proposal, state, mission, now), now)
+    second_sequence = adapter.sequence
+    CommandArbiter(journal).execute(adapter, supervisor.authorise(proposal, state, mission, now), now)
+
+    assert (first_sequence, second_sequence, adapter.sequence) == (1, 2, 3)
+    starts = [
+        event for event in journal.read_all() if event["event_type"] == "command_execution_started"
+    ]
+    assert [event["payload"]["sequence"] for event in starts] == [1, 2, 3]
+
+
+def test_command_receipt_with_wrong_sequence_fails_closed(tmp_path):
+    mission, state, proposal, now = _runtime_inputs()
+    result = OperationalSafetySupervisor().authorise(proposal, state, mission, now)
+    journal = JsonlAuditJournal(tmp_path / "audit.jsonl")
+
+    with pytest.raises(CommandExecutionError, match="sequence"):
+        CommandArbiter(journal).execute(_WrongSequenceAdapter(), result, now)
+
+    assert journal.read_all()[-1]["event_type"] == "command_rejected"
 
 
 def test_future_state_cannot_be_authorised():

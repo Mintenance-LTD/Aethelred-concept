@@ -9,7 +9,7 @@ executable command.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 from enum import Enum
 from math import isfinite
@@ -185,6 +185,7 @@ class AuthorisedCommand:
     target_position: Vec2 | None
     expires_at: datetime
     rule_ids: tuple[str, ...]
+    sequence: int = 0
 
 
 @dataclass(frozen=True)
@@ -204,6 +205,7 @@ class CommandReceipt:
     command_id: UUID
     accepted: bool
     recorded_at: datetime
+    sequence: int
     detail: str = ""
 
 
@@ -336,6 +338,7 @@ class CommandArbiter:
         self._journal = journal
         self._runtime_identity = runtime_identity
         self._consumed_command_ids: set[UUID] = set()
+        self._last_sequence_by_vehicle: dict[str, int] = {}
         if journal is not None:
             self._recover_consumed_commands()
 
@@ -367,6 +370,9 @@ class CommandArbiter:
             self._record_rejection(str(command.command_id), "Authorised command has already been consumed")
             raise PermissionError("Authorised command has already been consumed")
 
+        sequence = self._last_sequence_by_vehicle.get(command.vehicle_id, 0) + 1
+        command = replace(command, sequence=sequence)
+        self._last_sequence_by_vehicle[command.vehicle_id] = sequence
         # Consume before adapter invocation: a timeout or exception cannot be
         # safely distinguished from a partially applied external command.
         self._consumed_command_ids.add(command.command_id)
@@ -380,6 +386,7 @@ class CommandArbiter:
                     "mission_id": str(command.mission_id),
                     "vehicle_id": command.vehicle_id,
                     "capability": command.capability.value,
+                    "sequence": command.sequence,
                 },
             )
         try:
@@ -393,6 +400,9 @@ class CommandArbiter:
         if receipt.command_id != command.command_id:
             self._record_rejection(str(command.command_id), "Adapter receipt command ID does not match")
             raise CommandExecutionError("Adapter receipt command ID does not match authorised command")
+        if receipt.sequence != command.sequence:
+            self._record_rejection(str(command.command_id), "Adapter receipt sequence does not match")
+            raise CommandExecutionError("Adapter receipt sequence does not match authorised command")
         if receipt.recorded_at.tzinfo is None:
             self._record_rejection(str(command.command_id), "Adapter receipt time must be timezone-aware")
             raise CommandExecutionError("Adapter receipt time must be timezone-aware")
@@ -410,6 +420,7 @@ class CommandArbiter:
                         "mission_id": str(command.mission_id),
                         "vehicle_id": command.vehicle_id,
                         "capability": command.capability.value,
+                        "sequence": command.sequence,
                         "detail": receipt.detail,
                     },
                 )
@@ -424,6 +435,7 @@ class CommandArbiter:
                     "mission_id": str(command.mission_id),
                     "vehicle_id": command.vehicle_id,
                     "capability": command.capability.value,
+                    "sequence": command.sequence,
                     "accepted": receipt.accepted,
                     "detail": receipt.detail,
                 },
@@ -439,12 +451,23 @@ class CommandArbiter:
                 continue
             try:
                 command_id = UUID(str(event["correlation_id"]))
+                payload = event["payload"]
+                if not isinstance(payload, dict):
+                    raise TypeError("command payload must be a mapping")
+                vehicle_id = str(payload["vehicle_id"])
+                sequence = payload.get("sequence")
             except (KeyError, TypeError, ValueError) as error:
                 raise ValueError("Invalid executed-command audit record") from error
             if event_type == "command_execution_started":
                 if command_id in self._consumed_command_ids:
                     raise ValueError("Duplicate command-execution start audit record")
                 self._consumed_command_ids.add(command_id)
+                if sequence is not None:
+                    if not isinstance(sequence, int) or sequence < 1:
+                        raise ValueError("Invalid command sequence audit record")
+                    self._last_sequence_by_vehicle[vehicle_id] = max(
+                        self._last_sequence_by_vehicle.get(vehicle_id, 0), sequence
+                    )
             elif command_id not in self._consumed_command_ids:
                 # Support journals written before execution-start events were
                 # introduced, while still treating their completed commands as

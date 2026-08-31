@@ -30,6 +30,7 @@ class _NackAdapter:
             command_id=command.command_id,
             accepted=False,
             recorded_at=command.expires_at,
+            sequence=command.sequence,
             detail="vehicle rejected command",
         )
 
