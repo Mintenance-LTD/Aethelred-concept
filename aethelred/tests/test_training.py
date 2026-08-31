@@ -11,7 +11,7 @@ from __future__ import annotations
 import torch
 
 from aethelred.config.settings import TrainerConfig
-from aethelred.learning.trainer import PPOTrainer, RolloutBuffer, RolloutStep
+from aethelred.learning.trainer import CheckpointManager, PPOTrainer, RolloutBuffer, RolloutStep
 from aethelred.tactical_ai.policy import TacticalPolicy
 
 
@@ -154,3 +154,46 @@ def test_truncation_bootstraps_but_termination_does_not():
 
     assert advantages[0] == 0.5
     assert advantages[1] == 2.3
+
+
+def test_checkpoint_selection_uses_aggregate_score_not_episode_reward(tmp_path):
+    policy = TacticalPolicy.build()
+    manager = CheckpointManager(str(tmp_path / "checkpoints"))
+
+    manager.save(
+        policy,
+        episode=1,
+        reward=100.0,
+        metrics={},
+        selection_score=0.25,
+        selection_metric="rolling_reward_100",
+    )
+    manager.save(
+        policy,
+        episode=2,
+        reward=1.0,
+        metrics={},
+        selection_score=0.50,
+        selection_metric="rolling_reward_100",
+    )
+
+    selected = manager.load_best(policy)
+    assert selected["episode"] == 2
+    assert selected["selection"] == {"metric": "rolling_reward_100", "score": 0.50}
+    assert not manager.is_improved(0.50)
+
+
+def test_recovery_checkpoint_cannot_replace_selected_model(tmp_path):
+    policy = TacticalPolicy.build()
+    manager = CheckpointManager(str(tmp_path / "checkpoints"))
+    manager.save(
+        policy,
+        episode=1,
+        reward=1.0,
+        metrics={},
+        selection_score=0.25,
+        selection_metric="rolling_reward_100",
+    )
+    manager.save(policy, episode=2, reward=1000.0, metrics={})
+
+    assert manager.load_best(policy)["episode"] == 1

@@ -181,5 +181,6 @@ which is noisy — the latest checkpoint is often a better survival policy than 
 
 - `ModelExporter` uses `torch.jit.trace`, which bakes in trace-time control flow;
   revisit if exporting models with heavily data-dependent branching.
-- Checkpoint selection is by single-episode reward; an eval-based or running-average
-  criterion would pick more reliable policies.
+- Checkpoint selection uses the rolling 100-episode reward aggregate rather than
+  a single rollout. A future release process should still prefer a fully separate,
+  held-out evaluation suite when simulation resources permit it.
