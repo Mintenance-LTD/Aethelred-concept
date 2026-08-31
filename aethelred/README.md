@@ -133,6 +133,11 @@ an adapter, records dispatch before invoking that adapter, reconstructs consumed
 IDs from the verified journal after restart, and rejects acknowledgements that
 do not identify the same command.
 
+`ActiveReleaseVerifier` is the runtime artefact boundary: it requires an active
+ledger registration and compares the exact model digest, filename, code revision,
+canonical runtime configuration, observation schema, and runtime target before it
+will call a supplied model loader.
+
 ## Status / recent fixes
 
 The training and adaptation pipelines were previously non-functional. Fixed:

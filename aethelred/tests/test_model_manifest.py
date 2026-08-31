@@ -44,3 +44,36 @@ def test_manifest_requires_existing_evaluation_evidence(tmp_path):
             observation_schema="aethelred-observation/v1",
             runtime_target="torchscript",
         )
+
+
+def test_manifest_verification_rejects_artifact_or_runtime_drift(tmp_path):
+    model = tmp_path / "policy.pt"
+    report = tmp_path / "evaluation.json"
+    model.write_bytes(b"approved-model")
+    report.write_text('{"passed": true}', encoding="utf-8")
+    config = {"device": "cpu", "target_return": 10.0}
+    manifest = ModelManifest.create(
+        model,
+        report,
+        code_revision="abc123",
+        configuration=config,
+        observation_schema="aethelred-observation/v1",
+        runtime_target="torchscript",
+    )
+
+    assert manifest.verify_artifact(
+        model,
+        code_revision="abc123",
+        configuration={"target_return": 10.0, "device": "cpu"},
+        observation_schema="aethelred-observation/v1",
+        runtime_target="torchscript",
+    ) == model
+    model.write_bytes(b"substituted-model")
+    with pytest.raises(ValueError, match="digest"):
+        manifest.verify_artifact(
+            model,
+            code_revision="abc123",
+            configuration=config,
+            observation_schema="aethelred-observation/v1",
+            runtime_target="torchscript",
+        )

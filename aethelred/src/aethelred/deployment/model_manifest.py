@@ -32,6 +32,34 @@ class ModelManifest:
         target.write_text(self.to_json(), encoding="utf-8")
         return target
 
+    def verify_artifact(
+        self,
+        model_path: str | Path,
+        *,
+        code_revision: str,
+        configuration: dict[str, object],
+        observation_schema: str,
+        runtime_target: str,
+    ) -> Path:
+        """Fail closed unless a runtime artefact matches this exact manifest."""
+        model = Path(model_path)
+        if not model.is_file() or model.name != self.model_name:
+            raise ValueError("Model artefact path does not match the manifest")
+        if _sha256_file(model) != self.model_sha256:
+            raise ValueError("Model artefact digest does not match the manifest")
+        configuration_bytes = json.dumps(
+            configuration, sort_keys=True, separators=(",", ":")
+        ).encode("utf-8")
+        if hashlib.sha256(configuration_bytes).hexdigest() != self.configuration_sha256:
+            raise ValueError("Runtime configuration does not match the manifest")
+        if code_revision != self.code_revision:
+            raise ValueError("Runtime code revision does not match the manifest")
+        if observation_schema != self.observation_schema:
+            raise ValueError("Runtime observation schema does not match the manifest")
+        if runtime_target != self.runtime_target:
+            raise ValueError("Runtime target does not match the manifest")
+        return model
+
     @classmethod
     def create(
         cls,

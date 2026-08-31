@@ -16,9 +16,15 @@ from aethelred.deployment.promotion import (
     PromotionPolicy,
 )
 from aethelred.deployment.release_ledger import ReleaseLedger, ReleaseRegistration, RollbackRecord
+from aethelred.deployment.release_verifier import (
+    ActiveReleaseVerifier,
+    ReleaseVerificationError,
+    VerifiedReleaseArtifact,
+)
 from aethelred.deployment.release_workflow import ReleasePreparation, ReleasePreparationWorkflow
 
 __all__ = [
+    "ActiveReleaseVerifier",
     "ApprovedModelRelease",
     "EvaluationReport",
     "EvaluationScenario",
@@ -33,6 +39,8 @@ __all__ = [
     "ReleasePreparation",
     "ReleasePreparationWorkflow",
     "ReleaseRegistration",
+    "ReleaseVerificationError",
     "RollbackRecord",
     "ScenarioResult",
+    "VerifiedReleaseArtifact",
 ]
