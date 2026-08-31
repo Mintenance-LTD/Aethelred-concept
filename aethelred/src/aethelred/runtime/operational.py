@@ -612,12 +612,14 @@ class AuthenticatedOperationalControlLoop:
         mission_registry: object,
         lifecycle: object,
         configuration_registry: object,
+        health_supervisor: object,
     ) -> None:
         self._control_loop = control_loop
         self._authenticator = authenticator
         self._mission_registry = mission_registry
         self._lifecycle = lifecycle
         self._configuration_registry = configuration_registry
+        self._health_supervisor = health_supervisor
 
     def submit(
         self,
@@ -635,6 +637,7 @@ class AuthenticatedOperationalControlLoop:
             RuntimeConfigurationError,
             RuntimeConfigurationRegistry,
         )
+        from aethelred.runtime.health import RuntimeHealthError, RuntimeHealthSupervisor
         from aethelred.runtime.integrity import (
             AuthenticatedIntent,
             IntegrityError,
@@ -653,12 +656,18 @@ class AuthenticatedOperationalControlLoop:
             raise TypeError("Authenticated loop requires a RuntimeLifecycleSupervisor")
         if not isinstance(self._configuration_registry, RuntimeConfigurationRegistry):
             raise TypeError("Authenticated loop requires a RuntimeConfigurationRegistry")
+        if not isinstance(self._health_supervisor, RuntimeHealthSupervisor):
+            raise TypeError("Authenticated loop requires a RuntimeHealthSupervisor")
         if self._control_loop.runtime_identity is None:
             raise TypeError("Authenticated loop requires a RuntimeIdentity")
         if self._authenticator.journal is not self._control_loop._journal:
             raise TypeError("Intent authenticator and control loop must share one audit journal")
         if self._configuration_registry.journal is not self._control_loop._journal:
             raise TypeError("Configuration registry and control loop must share one audit journal")
+        if self._health_supervisor.journal is not self._control_loop._journal:
+            raise TypeError("Health supervisor and control loop must share one audit journal")
+        if self._health_supervisor.lifecycle is not self._lifecycle:
+            raise TypeError("Health supervisor and control loop must share one lifecycle supervisor")
         try:
             active_configuration = self._configuration_registry.active()
         except RuntimeConfigurationError as error:
@@ -696,6 +705,10 @@ class AuthenticatedOperationalControlLoop:
                 payload={"reason": str(error), "state": self._lifecycle.state.value},
             )
             raise PermissionError("Runtime lifecycle does not permit command submission") from error
+        try:
+            self._health_supervisor.require_healthy(now)
+        except RuntimeHealthError as error:
+            raise PermissionError("Runtime health is not sufficient for command submission") from error
         proposal = self._authenticator.verify(envelope, now)
         if envelope.issuer_id not in registered_mission.authorised_issuer_ids:
             self._control_loop._journal.record(

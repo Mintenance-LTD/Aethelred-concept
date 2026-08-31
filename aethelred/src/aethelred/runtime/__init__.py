@@ -6,6 +6,11 @@ from aethelred.runtime.configuration import (
     RuntimeConfigurationError,
     RuntimeConfigurationRegistry,
 )
+from aethelred.runtime.health import (
+    RuntimeHealthError,
+    RuntimeHealthReport,
+    RuntimeHealthSupervisor,
+)
 from aethelred.runtime.integrity import AuthenticatedIntent, IntegrityError, IntentAuthenticator
 from aethelred.runtime.lifecycle import (
     RuntimeLifecycleError,
@@ -60,6 +65,9 @@ __all__ = [
     "RuntimeConfiguration",
     "RuntimeConfigurationError",
     "RuntimeConfigurationRegistry",
+    "RuntimeHealthError",
+    "RuntimeHealthReport",
+    "RuntimeHealthSupervisor",
     "RuntimeIdentity",
     "RuntimeLifecycleError",
     "RuntimeLifecycleState",
