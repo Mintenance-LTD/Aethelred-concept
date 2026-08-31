@@ -16,6 +16,7 @@ from aethelred.runtime.operational import (
     IntentProposal,
     Mission,
     MissionCapability,
+    OperatingArea,
     OperationalControlLoop,
     OperationalSafetySupervisor,
     WorldState,
@@ -65,6 +66,7 @@ def _runtime_inputs() -> tuple[Mission, WorldState, IntentProposal, datetime]:
         valid_until=now + timedelta(minutes=1),
         allowed_capabilities=frozenset({MissionCapability.SURVEY, MissionCapability.HOLD}),
         assigned_vehicle_ids=frozenset({"vehicle-1"}),
+        operating_area=OperatingArea(minimum=Vec2(x=0.0, y=0.0), maximum=Vec2(x=500.0, y=500.0)),
     )
     state = WorldState(
         revision=4,
@@ -125,6 +127,25 @@ def test_future_state_cannot_be_authorised():
 
     assert result.outcome is AuthorisationOutcome.REJECTED
     assert result.rule_ids == ("state_timestamp",)
+
+
+def test_operating_area_rejects_outside_state_or_target():
+    mission, state, proposal, now = _runtime_inputs()
+    outside_target = IntentProposal(**{**proposal.__dict__, "target_position": Vec2(x=501.0, y=100.0)})
+    outside_state = WorldState(**{**state.__dict__, "position": Vec2(x=-1.0, y=50.0)})
+
+    target_result = OperationalSafetySupervisor().authorise(outside_target, state, mission, now)
+    state_result = OperationalSafetySupervisor().authorise(proposal, outside_state, mission, now)
+
+    assert target_result.rule_ids == ("target_operating_area",)
+    assert state_result.rule_ids == ("state_operating_area",)
+
+
+def test_operating_area_rejects_invalid_bounds_and_non_finite_positions():
+    with pytest.raises(ValueError, match="minimum"):
+        OperatingArea(minimum=Vec2(x=2.0, y=0.0), maximum=Vec2(x=1.0, y=1.0))
+    area = OperatingArea(minimum=Vec2(x=0.0, y=0.0), maximum=Vec2(x=1.0, y=1.0))
+    assert not area.contains(Vec2(x=float("nan"), y=0.0))
 
 
 def test_command_expiry_replay_and_restart_are_rejected(tmp_path):

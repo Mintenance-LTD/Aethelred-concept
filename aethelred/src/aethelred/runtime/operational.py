@@ -11,6 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from enum import Enum
+from math import isfinite
 from typing import Protocol
 from uuid import UUID, uuid4
 
@@ -38,6 +39,30 @@ class AuthorisationOutcome(str, Enum):
 
 
 @dataclass(frozen=True)
+class OperatingArea:
+    """Closed two-dimensional area an approved mission may occupy."""
+
+    minimum: Vec2
+    maximum: Vec2
+
+    def __post_init__(self) -> None:
+        values = (self.minimum.x, self.minimum.y, self.maximum.x, self.maximum.y)
+        if not all(isfinite(value) for value in values):
+            raise ValueError("Operating-area bounds must be finite")
+        if self.minimum.x > self.maximum.x or self.minimum.y > self.maximum.y:
+            raise ValueError("Operating-area minimum must not exceed maximum")
+
+    def contains(self, position: Vec2) -> bool:
+        """Return whether a finite position lies inside or on the mission boundary."""
+        if not isfinite(position.x) or not isfinite(position.y):
+            return False
+        return (
+            self.minimum.x <= position.x <= self.maximum.x
+            and self.minimum.y <= position.y <= self.maximum.y
+        )
+
+
+@dataclass(frozen=True)
 class Mission:
     """An operator-approved bounded mission revision."""
 
@@ -47,6 +72,7 @@ class Mission:
     valid_until: datetime
     allowed_capabilities: frozenset[MissionCapability]
     assigned_vehicle_ids: frozenset[str]
+    operating_area: OperatingArea
 
 
 @dataclass(frozen=True)
@@ -149,10 +175,16 @@ class OperationalSafetySupervisor:
             return self._reject("mission_identity", "Proposal does not match the approved mission")
         if proposal.vehicle_id != state.vehicle_id or proposal.vehicle_id not in mission.assigned_vehicle_ids:
             return self._reject("vehicle_assignment", "Vehicle is not assigned to this mission")
+        if not mission.operating_area.contains(state.position):
+            return self._reject("state_operating_area", "Vehicle state is outside the approved area")
         if not mission.valid_from <= checked_at <= mission.valid_until:
             return self._reject("mission_validity", "Mission is not currently valid")
         if proposal.capability not in mission.allowed_capabilities:
             return self._reject("capability_allowlist", "Requested capability is not allowed")
+        if proposal.target_position is not None and not mission.operating_area.contains(
+            proposal.target_position
+        ):
+            return self._reject("target_operating_area", "Target is outside the approved area")
         if proposal.state_revision != state.revision:
             return self._reject("state_revision", "Proposal was made from stale world state")
         if checked_at - state.observed_at > self.max_state_age:

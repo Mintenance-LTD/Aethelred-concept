@@ -133,6 +133,10 @@ an adapter, records dispatch before invoking that adapter, reconstructs consumed
 IDs from the verified journal after restart, and rejects acknowledgements that
 do not identify the same command.
 
+Each `Mission` also carries finite, closed `OperatingArea` bounds. The runtime
+authoriser rejects a proposal when its current vehicle position or requested
+target lies outside that approved area, independently of simulator geofencing.
+
 `ActiveReleaseVerifier` is the runtime artefact boundary: it requires an active
 ledger registration and compares the exact model digest, filename, code revision,
 canonical runtime configuration, observation schema, and runtime target before it
