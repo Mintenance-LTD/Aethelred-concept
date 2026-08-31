@@ -48,6 +48,11 @@ class RuntimeConfigurationRegistry:
         self._active_id: UUID | None = None
         self.recover()
 
+    @property
+    def journal(self) -> JsonlAuditJournal:
+        """Return the durable journal that establishes configuration authority."""
+        return self._journal
+
     def register(
         self,
         values: Mapping[str, object],

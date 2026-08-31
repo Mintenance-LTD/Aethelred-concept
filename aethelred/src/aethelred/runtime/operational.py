@@ -584,11 +584,13 @@ class AuthenticatedOperationalControlLoop:
         authenticator: object,
         mission_registry: object,
         lifecycle: object,
+        configuration_registry: object,
     ) -> None:
         self._control_loop = control_loop
         self._authenticator = authenticator
         self._mission_registry = mission_registry
         self._lifecycle = lifecycle
+        self._configuration_registry = configuration_registry
 
     def submit(
         self,
@@ -602,6 +604,10 @@ class AuthenticatedOperationalControlLoop:
 
         Imports are deferred to avoid a runtime-contract import cycle.
         """
+        from aethelred.runtime.configuration import (
+            RuntimeConfigurationError,
+            RuntimeConfigurationRegistry,
+        )
         from aethelred.runtime.integrity import (
             AuthenticatedIntent,
             IntegrityError,
@@ -618,10 +624,33 @@ class AuthenticatedOperationalControlLoop:
             raise TypeError("Authenticated loop requires a MissionRegistry")
         if not isinstance(self._lifecycle, RuntimeLifecycleSupervisor):
             raise TypeError("Authenticated loop requires a RuntimeLifecycleSupervisor")
+        if not isinstance(self._configuration_registry, RuntimeConfigurationRegistry):
+            raise TypeError("Authenticated loop requires a RuntimeConfigurationRegistry")
         if self._control_loop.runtime_identity is None:
             raise TypeError("Authenticated loop requires a RuntimeIdentity")
         if self._authenticator.journal is not self._control_loop._journal:
             raise TypeError("Intent authenticator and control loop must share one audit journal")
+        if self._configuration_registry.journal is not self._control_loop._journal:
+            raise TypeError("Configuration registry and control loop must share one audit journal")
+        try:
+            active_configuration = self._configuration_registry.active()
+        except RuntimeConfigurationError as error:
+            self._control_loop._journal.record(
+                "runtime_configuration_rejected",
+                correlation_id=str(self._control_loop.runtime_identity.release_id),
+                payload={"reason": str(error), **self._control_loop._identity_payload()},
+            )
+            raise PermissionError("No active approved runtime configuration") from error
+        if active_configuration.sha256 != self._control_loop.runtime_identity.configuration_sha256:
+            self._control_loop._journal.record(
+                "runtime_configuration_rejected",
+                correlation_id=str(active_configuration.configuration_id),
+                payload={
+                    "reason": "active configuration digest does not match runtime identity",
+                    **self._control_loop._identity_payload(),
+                },
+            )
+            raise PermissionError("Active runtime configuration does not match release identity")
         try:
             registered_mission = self._mission_registry.require_registered(mission)
         except MissionRegistryError as error:

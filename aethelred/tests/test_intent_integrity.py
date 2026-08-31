@@ -9,6 +9,7 @@ from uuid import uuid4
 import pytest
 
 from aethelred.runtime.audit import JsonlAuditJournal
+from aethelred.runtime.configuration import RuntimeConfigurationRegistry
 from aethelred.runtime.integrity import IntegrityError, IntentAuthenticator
 from aethelred.runtime.lifecycle import RuntimeLifecycleState, RuntimeLifecycleSupervisor
 from aethelred.runtime.missions import MissionRegistry
@@ -42,23 +43,38 @@ def _active_lifecycle(journal, mission):
     return lifecycle
 
 
-def _runtime_identity() -> RuntimeIdentity:
+def _runtime_identity(configuration_sha256: str) -> RuntimeIdentity:
     return RuntimeIdentity(
         release_id=uuid4(),
         software_revision="aethelred-test-build",
         model_sha256="a" * 64,
-        configuration_sha256="b" * 64,
+        configuration_sha256=configuration_sha256,
     )
+
+
+def _active_configuration(journal) -> RuntimeConfigurationRegistry:
+    registry = RuntimeConfigurationRegistry(journal)
+    record = registry.register(
+        {"runtime": {"deadline_ms": 250}},
+        "operator@example.test",
+        "Reviewed runtime configuration",
+    )
+    registry.activate(record.configuration_id, "operator@example.test", "Activate reviewed configuration")
+    return registry
 
 
 def _authenticated_loop(journal, authenticator, mission):
     registry = MissionRegistry(journal)
     registry.register(mission, "operator@example.test", "Approved non-offensive mission")
+    configuration_registry = _active_configuration(journal)
     return AuthenticatedOperationalControlLoop(
-        OperationalControlLoop(OperationalSafetySupervisor(), journal, _runtime_identity()),
+        OperationalControlLoop(
+            OperationalSafetySupervisor(), journal, _runtime_identity(configuration_registry.active().sha256)
+        ),
         authenticator,
         registry,
         _active_lifecycle(journal, mission),
+        configuration_registry,
     )
 
 
@@ -75,6 +91,8 @@ def test_authenticated_intent_is_verified_before_safety_and_execution(tmp_path) 
     assert adapter.command_id is not None
     assert [event["event_type"] for event in journal.read_all()] == [
         "mission_registered",
+        "runtime_configuration_registered",
+        "runtime_configuration_activated",
         "runtime_lifecycle_transition",
         "runtime_lifecycle_transition",
         "runtime_lifecycle_transition",
@@ -185,11 +203,15 @@ def test_unregistered_mission_cannot_reach_authentication_or_adapter(tmp_path) -
     journal = JsonlAuditJournal(tmp_path / "audit.jsonl")
     authenticator = IntentAuthenticator(b"a" * 32, journal)
     envelope = authenticator.sign(proposal, "planner-service", issued_at=now)
+    configuration_registry = _active_configuration(journal)
     loop = AuthenticatedOperationalControlLoop(
-        OperationalControlLoop(OperationalSafetySupervisor(), journal, _runtime_identity()),
+        OperationalControlLoop(
+            OperationalSafetySupervisor(), journal, _runtime_identity(configuration_registry.active().sha256)
+        ),
         authenticator,
         MissionRegistry(journal),
         _active_lifecycle(journal, mission),
+        configuration_registry,
     )
 
     with pytest.raises(PermissionError, match="not currently registered"):
@@ -214,11 +236,17 @@ def test_nonce_replay_is_rejected_after_authenticator_restart(tmp_path) -> None:
     lifecycle.load_mission(mission)
     lifecycle.arm("operator@example.test")
     lifecycle.activate()
+    configuration_registry = RuntimeConfigurationRegistry(restarted_journal)
     loop = AuthenticatedOperationalControlLoop(
-        OperationalControlLoop(OperationalSafetySupervisor(), restarted_journal, _runtime_identity()),
+        OperationalControlLoop(
+            OperationalSafetySupervisor(),
+            restarted_journal,
+            _runtime_identity(configuration_registry.active().sha256),
+        ),
         restarted,
         MissionRegistry(restarted_journal),
         lifecycle,
+        configuration_registry,
     )
     with pytest.raises(IntegrityError, match="already been used"):
         loop.submit(envelope, state, mission, _RecordingAdapter(), now)
@@ -231,11 +259,15 @@ def test_authenticated_loop_rejects_an_authenticator_on_another_journal(tmp_path
     envelope = authenticator.sign(proposal, "planner-service", issued_at=now)
     registry = MissionRegistry(journal)
     registry.register(mission, "operator@example.test", "Approved non-offensive mission")
+    configuration_registry = _active_configuration(journal)
     loop = AuthenticatedOperationalControlLoop(
-        OperationalControlLoop(OperationalSafetySupervisor(), journal, _runtime_identity()),
+        OperationalControlLoop(
+            OperationalSafetySupervisor(), journal, _runtime_identity(configuration_registry.active().sha256)
+        ),
         authenticator,
         registry,
         _active_lifecycle(journal, mission),
+        configuration_registry,
     )
 
     with pytest.raises(TypeError, match="share one audit journal"):
@@ -249,15 +281,39 @@ def test_authenticated_loop_rejects_missing_runtime_identity(tmp_path) -> None:
     envelope = authenticator.sign(proposal, "planner-service", issued_at=now)
     registry = MissionRegistry(journal)
     registry.register(mission, "operator@example.test", "Approved non-offensive mission")
+    configuration_registry = _active_configuration(journal)
     loop = AuthenticatedOperationalControlLoop(
         OperationalControlLoop(OperationalSafetySupervisor(), journal),
         authenticator,
         registry,
         _active_lifecycle(journal, mission),
+        configuration_registry,
     )
 
     with pytest.raises(TypeError, match="RuntimeIdentity"):
         loop.submit(envelope, state, mission, _RecordingAdapter(), now)
+
+
+def test_authenticated_loop_rejects_configuration_digest_mismatch(tmp_path) -> None:
+    mission, state, proposal, now = _runtime_inputs()
+    journal = JsonlAuditJournal(tmp_path / "audit.jsonl")
+    authenticator = IntentAuthenticator(b"a" * 32, journal)
+    envelope = authenticator.sign(proposal, "planner-service", issued_at=now)
+    registry = MissionRegistry(journal)
+    registry.register(mission, "operator@example.test", "Approved non-offensive mission")
+    configuration_registry = _active_configuration(journal)
+    loop = AuthenticatedOperationalControlLoop(
+        OperationalControlLoop(OperationalSafetySupervisor(), journal, _runtime_identity("c" * 64)),
+        authenticator,
+        registry,
+        _active_lifecycle(journal, mission),
+        configuration_registry,
+    )
+
+    with pytest.raises(PermissionError, match="does not match"):
+        loop.submit(envelope, state, mission, _RecordingAdapter(), now)
+
+    assert journal.read_all()[-1]["event_type"] == "runtime_configuration_rejected"
 
 
 def test_adapter_nack_transitions_active_runtime_to_safe_state(tmp_path) -> None:
@@ -268,11 +324,15 @@ def test_adapter_nack_transitions_active_runtime_to_safe_state(tmp_path) -> None
     registry = MissionRegistry(journal)
     registry.register(mission, "operator@example.test", "Approved non-offensive mission")
     lifecycle = _active_lifecycle(journal, mission)
+    configuration_registry = _active_configuration(journal)
     loop = AuthenticatedOperationalControlLoop(
-        OperationalControlLoop(OperationalSafetySupervisor(), journal, _runtime_identity()),
+        OperationalControlLoop(
+            OperationalSafetySupervisor(), journal, _runtime_identity(configuration_registry.active().sha256)
+        ),
         authenticator,
         registry,
         lifecycle,
+        configuration_registry,
     )
 
     with pytest.raises(CommandExecutionError, match="negatively acknowledged"):
