@@ -35,6 +35,17 @@ class ModelManifest:
         target.write_text(self.to_json(), encoding="utf-8")
         return target
 
+    def require_complete_provenance(self) -> None:
+        """Reject legacy or placeholder metadata before a production release is used."""
+        if self.schema_version != "1.1":
+            raise ValueError("Release manifest must use provenance schema 1.1")
+        for value, name in (
+            (self.training_data_reference, "training data reference"),
+            (self.runtime_environment, "runtime environment"),
+            (self.build_provenance, "build provenance"),
+        ):
+            _require_provenance(value, name)
+
     def verify_artifact(
         self,
         model_path: str | Path,
@@ -49,6 +60,7 @@ class ModelManifest:
     ) -> Path:
         """Fail closed unless a runtime artefact matches this exact manifest."""
         model = Path(model_path)
+        self.require_complete_provenance()
         if not model.is_file() or model.name != self.model_name:
             raise ValueError("Model artefact path does not match the manifest")
         if _sha256_file(model) != self.model_sha256:

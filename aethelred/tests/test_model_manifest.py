@@ -89,3 +89,19 @@ def test_manifest_verification_rejects_artifact_or_runtime_drift(tmp_path):
             observation_schema="aethelred-observation/v1",
             runtime_target="torchscript",
         )
+
+
+def test_release_provenance_rejects_legacy_manifest():
+    manifest = ModelManifest(
+        schema_version="1.0",
+        model_name="legacy.pt",
+        model_sha256="a" * 64,
+        code_revision="abc123",
+        configuration_sha256="b" * 64,
+        observation_schema="aethelred-observation/v1",
+        evaluation_report_sha256="c" * 64,
+        runtime_target="torchscript",
+    )
+
+    with pytest.raises(ValueError, match="schema 1.1"):
+        manifest.require_complete_provenance()

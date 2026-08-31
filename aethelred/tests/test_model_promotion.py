@@ -17,7 +17,7 @@ from aethelred.deployment.promotion import (
 
 def _manifest(report_hash: str) -> ModelManifest:
     return ModelManifest(
-        schema_version="1.0",
+        schema_version="1.1",
         model_name="candidate.pt",
         model_sha256="a" * 64,
         code_revision="abc123",
@@ -25,6 +25,9 @@ def _manifest(report_hash: str) -> ModelManifest:
         observation_schema="aethelred-observation/v1",
         evaluation_report_sha256=report_hash,
         runtime_target="torchscript",
+        training_data_reference="dataset://held-out/v1",
+        runtime_environment="python=3.11;torch=2.2",
+        build_provenance="build://ci/123",
     )
 
 

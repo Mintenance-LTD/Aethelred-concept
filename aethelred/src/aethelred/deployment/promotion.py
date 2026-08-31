@@ -112,6 +112,10 @@ class ModelPromotionGate:
         approval: HumanApproval,
     ) -> ApprovedModelRelease:
         """Create an approval record after validating immutable release evidence."""
+        try:
+            manifest.require_complete_provenance()
+        except ValueError as error:
+            raise PromotionError("Manifest provenance is incomplete") from error
         reasons = self.assess(evaluation)
         if reasons:
             raise PromotionError("Candidate is not eligible: " + "; ".join(reasons))

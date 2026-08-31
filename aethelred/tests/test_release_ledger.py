@@ -20,7 +20,7 @@ from aethelred.runtime.audit import JsonlAuditJournal
 def _approved(model_name: str):
     report_hash = ("a" if model_name == "baseline.pt" else "b") * 64
     manifest = ModelManifest(
-        schema_version="1.0",
+        schema_version="1.1",
         model_name=model_name,
         model_sha256="c" * 64,
         code_revision="abc123",
@@ -28,6 +28,9 @@ def _approved(model_name: str):
         observation_schema="aethelred-observation/v1",
         evaluation_report_sha256=report_hash,
         runtime_target="torchscript",
+        training_data_reference="dataset://held-out/v1",
+        runtime_environment="python=3.11;torch=2.2",
+        build_provenance="build://ci/123",
     )
     evaluation = HeldOutEvaluation(
         candidate_id=uuid4(),
