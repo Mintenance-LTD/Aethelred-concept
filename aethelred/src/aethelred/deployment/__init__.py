@@ -1,5 +1,6 @@
 """Deployment safety, export, and model-governance components."""
 
+from aethelred.deployment.approved_policy import ApprovedIntentPolicy, ApprovedPolicyError
 from aethelred.deployment.attestation import (
     HmacReleaseAttestor,
     ReleaseAttestation,
@@ -32,7 +33,9 @@ from aethelred.deployment.release_workflow import ReleasePreparation, ReleasePre
 
 __all__ = [
     "ActiveReleaseVerifier",
+    "ApprovedIntentPolicy",
     "ApprovedModelRelease",
+    "ApprovedPolicyError",
     "EvaluationReport",
     "EvaluationScenario",
     "HeldOutEvaluation",
