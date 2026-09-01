@@ -12,6 +12,11 @@ from datetime import UTC, datetime
 from math import isfinite
 from uuid import UUID
 
+from aethelred.deployment.attestation import (
+    ReleaseAttestation,
+    ReleaseAttestationError,
+    ReleaseAttestationVerifier,
+)
 from aethelred.deployment.model_manifest import ModelManifest
 
 
@@ -82,6 +87,7 @@ class ApprovedModelRelease:
     manifest: ModelManifest
     evaluation: HeldOutEvaluation
     approval: HumanApproval
+    attestation: ReleaseAttestation
 
 
 class ModelPromotionGate:
@@ -122,6 +128,8 @@ class ModelPromotionGate:
         manifest: ModelManifest,
         evaluation: HeldOutEvaluation,
         approval: HumanApproval,
+        attestation: ReleaseAttestation | None = None,
+        attestation_verifier: ReleaseAttestationVerifier | None = None,
     ) -> ApprovedModelRelease:
         """Create an approval record after validating immutable release evidence."""
         try:
@@ -133,4 +141,10 @@ class ModelPromotionGate:
             raise PromotionError("Candidate is not eligible: " + "; ".join(reasons))
         if manifest.evaluation_report_sha256 != evaluation.report_sha256:
             raise PromotionError("Manifest evaluation hash does not match supplied evidence")
-        return ApprovedModelRelease(manifest=manifest, evaluation=evaluation, approval=approval)
+        if attestation is None or attestation_verifier is None:
+            raise PromotionError("Release attestation is required")
+        try:
+            attestation_verifier.verify(attestation, manifest, evaluation, approval)
+        except ReleaseAttestationError as error:
+            raise PromotionError("Release attestation is invalid") from error
+        return ApprovedModelRelease(manifest=manifest, evaluation=evaluation, approval=approval, attestation=attestation)

@@ -6,6 +6,7 @@ from uuid import uuid4
 
 import pytest
 
+from aethelred.deployment.attestation import HmacReleaseAttestor
 from aethelred.deployment.model_manifest import ModelManifest
 from aethelred.deployment.promotion import (
     HeldOutEvaluation,
@@ -15,6 +16,8 @@ from aethelred.deployment.promotion import (
 )
 from aethelred.deployment.release_ledger import ReleaseLedger
 from aethelred.runtime.audit import JsonlAuditJournal
+
+_ATTESTOR = HmacReleaseAttestor("sil-attestor", b"a" * 32)
 
 
 def _approved(model_name: str):
@@ -40,11 +43,8 @@ def _approved(model_name: str):
         safety_checks={"authorisation": True},
         report_sha256=report_hash,
     )
-    return ModelPromotionGate().approve(
-        manifest,
-        evaluation,
-        HumanApproval.now("approver@example.test", "Held-out review complete"),
-    )
+    approval = HumanApproval.now("approver@example.test", "Held-out review complete")
+    return ModelPromotionGate().approve(manifest, evaluation, approval, _ATTESTOR.attest(manifest, evaluation, approval), _ATTESTOR)
 
 
 def test_release_lifecycle_is_durable_and_rollback_is_accountable(tmp_path) -> None:

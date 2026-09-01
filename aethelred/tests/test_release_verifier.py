@@ -8,11 +8,14 @@ from uuid import uuid4
 
 import pytest
 
+from aethelred.deployment.attestation import HmacReleaseAttestor
 from aethelred.deployment.model_manifest import ModelManifest
 from aethelred.deployment.promotion import HeldOutEvaluation, HumanApproval, ModelPromotionGate
 from aethelred.deployment.release_ledger import ReleaseLedger
 from aethelred.deployment.release_verifier import ActiveReleaseVerifier, ReleaseVerificationError
 from aethelred.runtime.audit import JsonlAuditJournal
+
+_ATTESTOR = HmacReleaseAttestor("sil-attestor", b"a" * 32)
 
 
 def _activate_release(tmp_path: Path, model_path: Path) -> tuple[ReleaseLedger, object]:
@@ -28,17 +31,17 @@ def _activate_release(tmp_path: Path, model_path: Path) -> tuple[ReleaseLedger, 
         runtime_environment="python=3.11;torch=2.2",
         build_provenance="build://ci/123",
     )
-    approved = ModelPromotionGate().approve(
-        manifest,
-        HeldOutEvaluation(
+    evaluation = HeldOutEvaluation(
             candidate_id=uuid4(),
             scenario_count=20,
             candidate_metrics={"mission_success": 0.9},
             baseline_metrics={"mission_success": 0.8},
             safety_checks={"authorisation": True},
             report_sha256=report_hash,
-        ),
-        HumanApproval.now("approver@example.test", "Held-out review complete"),
+        )
+    approval = HumanApproval.now("approver@example.test", "Held-out review complete")
+    approved = ModelPromotionGate().approve(
+        manifest, evaluation, approval, _ATTESTOR.attest(manifest, evaluation, approval), _ATTESTOR
     )
     ledger = ReleaseLedger(JsonlAuditJournal(tmp_path / "audit.jsonl"))
     registration = ledger.register(approved)

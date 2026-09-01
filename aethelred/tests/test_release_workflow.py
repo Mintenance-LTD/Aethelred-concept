@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from uuid import uuid4
 
+from aethelred.deployment.attestation import HmacReleaseAttestor
 from aethelred.deployment.evaluation import EvaluationScenario, HeldOutEvaluator, ScenarioResult
 from aethelred.deployment.promotion import HumanApproval, ModelPromotionGate
 from aethelred.deployment.release_ledger import ReleaseLedger
@@ -25,7 +26,7 @@ def test_release_workflow_binds_artifact_evidence_approval_and_ledger(tmp_path) 
     model.write_bytes(b"candidate-model")
     journal = JsonlAuditJournal(tmp_path / "release-audit.jsonl")
     workflow = ReleasePreparationWorkflow(
-        HeldOutEvaluator(), ModelPromotionGate(), ReleaseLedger(journal)
+        HeldOutEvaluator(), ModelPromotionGate(), ReleaseLedger(journal), HmacReleaseAttestor("sil-attestor", b"a" * 32)
     )
 
     prepared = workflow.prepare(

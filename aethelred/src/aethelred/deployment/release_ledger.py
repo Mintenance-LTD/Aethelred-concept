@@ -8,6 +8,7 @@ from hashlib import sha256
 from typing import Any
 from uuid import UUID
 
+from aethelred.deployment.attestation import ReleaseAttestation
 from aethelred.deployment.model_manifest import ModelManifest
 from aethelred.deployment.promotion import (
     ApprovedModelRelease,
@@ -76,6 +77,7 @@ class ReleaseLedger:
                     "manifest": asdict(approved_release.manifest),
                     "evaluation": asdict(approved_release.evaluation),
                     "approval": asdict(approved_release.approval),
+                    "attestation": asdict(approved_release.attestation),
                 },
             },
         )
@@ -183,7 +185,8 @@ class ReleaseLedger:
             manifest_raw = raw["manifest"]
             evaluation_raw = raw["evaluation"]
             approval_raw = raw["approval"]
-            if not all(isinstance(value, dict) for value in (manifest_raw, evaluation_raw, approval_raw)):
+            attestation_raw = raw["attestation"]
+            if not all(isinstance(value, dict) for value in (manifest_raw, evaluation_raw, approval_raw, attestation_raw)):
                 raise TypeError("release payload sections must be mappings")
             manifest = ModelManifest(**manifest_raw)
             evaluation = HeldOutEvaluation(
@@ -200,6 +203,14 @@ class ReleaseLedger:
                 rationale=str(approval_raw["rationale"]),
                 approved_at=datetime.fromisoformat(str(approval_raw["approved_at"])),
             )
+            attestation = ReleaseAttestation(
+                issuer_id=str(attestation_raw["issuer_id"]),
+                manifest_sha256=str(attestation_raw["manifest_sha256"]),
+                evaluation_report_sha256=str(attestation_raw["evaluation_report_sha256"]),
+                approver=str(attestation_raw["approver"]),
+                approved_at=datetime.fromisoformat(str(attestation_raw["approved_at"])),
+                signature=str(attestation_raw["signature"]),
+            )
         except (KeyError, TypeError, ValueError) as error:
             raise PromotionError("Invalid approved-release payload in audit log") from error
-        return ApprovedModelRelease(manifest=manifest, evaluation=evaluation, approval=approval)
+        return ApprovedModelRelease(manifest=manifest, evaluation=evaluation, approval=approval, attestation=attestation)

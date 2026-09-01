@@ -1,5 +1,11 @@
 """Deployment safety, export, and model-governance components."""
 
+from aethelred.deployment.attestation import (
+    HmacReleaseAttestor,
+    ReleaseAttestation,
+    ReleaseAttestationError,
+    ReleaseAttestationVerifier,
+)
 from aethelred.deployment.evaluation import (
     EvaluationReport,
     EvaluationScenario,
@@ -31,12 +37,16 @@ __all__ = [
     "EvaluationScenario",
     "HeldOutEvaluation",
     "HeldOutEvaluator",
+    "HmacReleaseAttestor",
     "HumanApproval",
     "ModelManifest",
     "ModelPromotionGate",
     "OperationalScenarioCategory",
     "PromotionError",
     "PromotionPolicy",
+    "ReleaseAttestation",
+    "ReleaseAttestationError",
+    "ReleaseAttestationVerifier",
     "ReleaseLedger",
     "ReleasePreparation",
     "ReleasePreparationWorkflow",

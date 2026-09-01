@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from uuid import UUID
 
+from aethelred.deployment.attestation import HmacReleaseAttestor
 from aethelred.deployment.evaluation import (
     EvaluationReport,
     EvaluationScenario,
@@ -35,10 +36,12 @@ class ReleasePreparationWorkflow:
         evaluator: HeldOutEvaluator,
         promotion_gate: ModelPromotionGate,
         ledger: ReleaseLedger,
+        attestor: HmacReleaseAttestor,
     ) -> None:
         self._evaluator = evaluator
         self._promotion_gate = promotion_gate
         self._ledger = ledger
+        self._attestor = attestor
 
     def prepare(
         self,
@@ -74,6 +77,9 @@ class ReleasePreparationWorkflow:
             runtime_environment=runtime_environment,
             build_provenance=build_provenance,
         )
-        approved = self._promotion_gate.approve(manifest, report.evaluation, approval)
+        attestation = self._attestor.attest(manifest, report.evaluation, approval)
+        approved = self._promotion_gate.approve(
+            manifest, report.evaluation, approval, attestation, self._attestor
+        )
         registration = self._ledger.register(approved)
         return ReleasePreparation(written_report, report, manifest, registration)
