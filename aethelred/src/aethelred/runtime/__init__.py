@@ -39,7 +39,6 @@ from aethelred.runtime.operational import (
     RuntimeIdentity,
     WorldState,
 )
-from aethelred.runtime.simulator_adapter import SimulatorCommandAdapter
 
 __all__ = [
     "AuditEvent",
@@ -78,6 +77,5 @@ __all__ = [
     "RuntimeLifecycleError",
     "RuntimeLifecycleState",
     "RuntimeLifecycleSupervisor",
-    "SimulatorCommandAdapter",
     "WorldState",
 ]

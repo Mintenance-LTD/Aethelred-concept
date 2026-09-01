@@ -1,4 +1,4 @@
-"""Non-offensive adapter between operational commands and the simulator."""
+"""Simulator-only adapter for exercising authorised operational commands."""
 
 from __future__ import annotations
 
@@ -22,7 +22,12 @@ class DecisionSimulation(Protocol):
 
 
 class SimulatorCommandAdapter:
-    """Execute allowed operational capabilities through one simulator decision."""
+    """Exercise bounded operational commands through one simulator decision.
+
+    This adapter belongs to the simulation package because it translates into
+    simulator-specific tactical representations. It is never a production
+    runtime command adapter.
+    """
 
     def __init__(self, simulator: DecisionSimulation) -> None:
         self._simulator = simulator

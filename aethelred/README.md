@@ -87,9 +87,11 @@ future bounded uses such as survey, inspection, mapping, relay, and search.
 `OperationalSafetySupervisor` validates mission identity, vehicle assignment,
 capability allow-lists, state revision/freshness, expiry, and vehicle health;
 only its `AuthorisedCommand` can pass through `CommandArbiter` to an adapter.
-`SimulatorCommandAdapter` is the first adapter: it uses the simulator's
+The simulator-only `SimulatorCommandAdapter` lives in
+`aethelred.simulation.operational_adapter`; it uses the simulator's
 decision-only execution path and maps every allowed operational capability to a
-non-offensive simulator action.
+non-offensive simulator action. It is deliberately excluded from the production
+runtime package because it depends on the simulator's tactical representation.
 
 For a production-facing entry point, `AuthenticatedOperationalControlLoop`
 requires an `AuthenticatedIntent` validated by `IntentAuthenticator` before the

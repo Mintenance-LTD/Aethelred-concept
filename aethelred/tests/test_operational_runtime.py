@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from uuid import uuid4
 
 import pytest
@@ -23,7 +24,7 @@ from aethelred.runtime.operational import (
     OperationalSafetySupervisor,
     WorldState,
 )
-from aethelred.runtime.simulator_adapter import SimulatorCommandAdapter
+from aethelred.simulation.operational_adapter import SimulatorCommandAdapter
 
 
 class _RecordingAdapter:
@@ -372,3 +373,13 @@ def test_simulator_adapter_never_emits_engage_actions():
 
     assert simulation.decision is not None
     assert all(action.action_type is not TacticalActionType.ENGAGE for action in simulation.decision.actions)
+
+
+def test_operational_runtime_contains_no_tactical_simulator_dependencies():
+    """Production runtime contracts must not import tactical simulator types."""
+    runtime_root = Path(__file__).parents[1] / "src" / "aethelred" / "runtime"
+    runtime_source = "\n".join(path.read_text(encoding="utf-8") for path in runtime_root.glob("*.py"))
+
+    assert "aethelred.core.actions" not in runtime_source
+    assert "aethelred.core.enums" not in runtime_source
+    assert "TacticalActionType" not in runtime_source
