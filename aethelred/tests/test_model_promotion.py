@@ -12,6 +12,7 @@ from aethelred.deployment.promotion import (
     HumanApproval,
     ModelPromotionGate,
     PromotionError,
+    PromotionPolicy,
 )
 
 
@@ -76,6 +77,20 @@ def test_gate_rejects_manifest_with_different_evaluation_evidence() -> None:
     with pytest.raises(PromotionError, match="hash does not match"):
         ModelPromotionGate().approve(
             _manifest("d" * 64),
+            evaluation,
+            HumanApproval.now("reviewer@example.test", "Reviewed"),
+        )
+
+
+def test_gate_requires_declared_operational_scenario_coverage() -> None:
+    evaluation = _evaluation(scenario_categories=("survey",))
+    gate = ModelPromotionGate(
+        PromotionPolicy(required_scenario_categories=("survey", "degraded_gps"))
+    )
+
+    with pytest.raises(PromotionError, match="degraded_gps"):
+        gate.approve(
+            _manifest(evaluation.report_sha256),
             evaluation,
             HumanApproval.now("reviewer@example.test", "Reviewed"),
         )

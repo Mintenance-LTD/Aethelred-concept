@@ -193,6 +193,7 @@ class ReleaseLedger:
                 baseline_metrics=dict(evaluation_raw["baseline_metrics"]),
                 safety_checks=dict(evaluation_raw["safety_checks"]),
                 report_sha256=str(evaluation_raw["report_sha256"]),
+                scenario_categories=tuple(evaluation_raw.get("scenario_categories", ())),
             )
             approval = HumanApproval(
                 approver=str(approval_raw["approver"]),

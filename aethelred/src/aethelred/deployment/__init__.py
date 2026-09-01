@@ -4,6 +4,7 @@ from aethelred.deployment.evaluation import (
     EvaluationReport,
     EvaluationScenario,
     HeldOutEvaluator,
+    OperationalScenarioCategory,
     ScenarioResult,
 )
 from aethelred.deployment.model_manifest import ModelManifest
@@ -33,6 +34,7 @@ __all__ = [
     "HumanApproval",
     "ModelManifest",
     "ModelPromotionGate",
+    "OperationalScenarioCategory",
     "PromotionError",
     "PromotionPolicy",
     "ReleaseLedger",
