@@ -1,0 +1,1269 @@
+{
+  "candidate": "mission-workload",
+  "candidate_clears_local_comparison": true,
+  "candidate_sha256": "44abe8386fa937d826b821032c907df51ec0ba42a0509fa182b5fde1dfdbaa0d",
+  "deployment_approved": false,
+  "environment": {
+    "numpy": "2.4.6",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "python": "3.13.3"
+  },
+  "evaluation_plan": {
+    "analysis": "Paired layout-cluster bootstrap, 20000 resamples, seed 20261001, percentile 95% intervals",
+    "candidate": "mission-workload",
+    "candidate_sha256": "44abe8386fa937d826b821032c907df51ec0ba42a0509fa182b5fde1dfdbaa0d",
+    "excluded_seeds": [
+      9100,
+      9101,
+      9102,
+      9103,
+      10000,
+      10001,
+      10002,
+      10003,
+      10004,
+      10005,
+      10006,
+      10007,
+      10008,
+      10009,
+      10010,
+      10011,
+      10012,
+      10013,
+      10014,
+      10015,
+      10500,
+      10501,
+      10502,
+      10503
+    ],
+    "frozen_comparator_model_sha256": "79f7e19dc18cc7db97c9516ac8a922ab46c65f929525311777efa7f556d29533",
+    "frozen_model": true,
+    "held_out_seeds": [
+      11000,
+      11001,
+      11002,
+      11003,
+      11004,
+      11005,
+      11006,
+      11007,
+      11008,
+      11009,
+      11010,
+      11011,
+      11012,
+      11013,
+      11014,
+      11015
+    ],
+    "independent_layout_count": 16,
+    "scenarios": [
+      "nominal",
+      "unit_loss",
+      "comms_loss",
+      "stale_sensor",
+      "coordinator_restart"
+    ],
+    "source_file_sha256": {
+      "__init__.py": "0e770fe4df4dc1c12695ddb762f432c18c6ef75c9d4fb02f00bd89989eaff43b",
+      "audit.py": "35c1fc99a0ff1da12633ed70f043e14e0b78da92136e9ee98ffbe44efc02962b",
+      "benchmark_mapping_allocators.py": "4ea5683bf45d5cf39d72596f06b95fca88e7e0472308f9b6ffd9ab6e8f2c18f4",
+      "configuration.py": "6db72a9eba29892dc597f7f10ed2f31ce7e91ca3afbf8c4d3e8eec98aaeea9f3",
+      "geometry.py": "5ed3f6cb44b48328c08fb0f81c8955c6af5906006e8c5201ee762a920b19bf93",
+      "health.py": "6b0ee3c06f417703adc67b17251805451ede73cc1ff1c50cf5b93565f1d895f6",
+      "integrity.py": "7c43492f099607826210e0f5a8cc9faf18bd45d20ab9c10769c6ac7d7a01f851",
+      "lifecycle.py": "45663e8c90280a9e164f7de2d9924a3353ba910aed66e05425076201ab91309b",
+      "mapping_allocation.py": "33fd00b3308a16abe89c341ecf382ffa7152405976e6940bf379a8f43b7c14c7",
+      "mapping_allocator.py": "364387b5643856258e5ceca6b1ac7d968d6bcf106e1356fae7bc90ecc43edb3e",
+      "mapping_mission.py": "f5b8699e4c1f2e451eeb493512ad7fb4a35b4ca3c4188b3a52b39233e9664ad2",
+      "mapping_tasks.py": "aac042b219dd8c8b71c7089b473077729a3a14d158e81fe84d377f2474d4b008",
+      "missions.py": "c622500594ee0fc0f5f5d6c6d31df4e0928c195117352467ef9f6699d5b4cb19",
+      "operational.py": "e417b57a08cc84248a7e5629af67f350911e812f7e8d42058f60e03a741a84e2",
+      "workload_allocator.py": "44abe8386fa937d826b821032c907df51ec0ba42a0509fa182b5fde1dfdbaa0d"
+    },
+    "source_revision": "92286eaec5d45b33601c2618af4d1bb4f5bbea30",
+    "workers": 4
+  },
+  "frozen_comparator_model_sha256": "79f7e19dc18cc7db97c9516ac8a922ab46c65f929525311777efa7f556d29533",
+  "held_out_seeds": [
+    11000,
+    11001,
+    11002,
+    11003,
+    11004,
+    11005,
+    11006,
+    11007,
+    11008,
+    11009,
+    11010,
+    11011,
+    11012,
+    11013,
+    11014,
+    11015
+  ],
+  "interpretation": "Matched synthetic missions, descriptive metrics only; no automatic release promotion.",
+  "paired_analysis": {
+    "bootstrap_resamples": 20000,
+    "bootstrap_seed": 20261001,
+    "candidate": "mission-workload",
+    "comparisons": {
+      "analytic-balanced": {
+        "distance_travelled": {
+          "bootstrap_95_percent_interval": [
+            -53.79558062499999,
+            -26.45554906250002
+          ],
+          "by_scenario": {
+            "comms_loss": -38.418062500000005,
+            "coordinator_restart": -45.7076875,
+            "nominal": -45.7076875,
+            "stale_sensor": -41.406499999999994,
+            "unit_loss": -26.296999999999986
+          },
+          "layout_mean_differences": {
+            "11000": -65.3254,
+            "11001": -23.034399999999987,
+            "11002": -78.18439999999998,
+            "11003": -59.871399999999994,
+            "11004": -39.16580000000001,
+            "11005": -28.452800000000014,
+            "11006": -22.02759999999997,
+            "11007": -1.6045999999999823,
+            "11008": -37.86339999999998,
+            "11009": -11.974799999999998,
+            "11010": -40.98419999999999,
+            "11011": -16.452399999999976,
+            "11012": -12.962800000000026,
+            "11013": -83.54740000000001,
+            "11014": -15.639600000000007,
+            "11015": -95.0272
+          },
+          "layouts_faster_or_shorter": 16,
+          "layouts_slower_or_longer": 0,
+          "layouts_tied": 0,
+          "mean_paired_difference": -39.5073875
+        },
+        "ticks": {
+          "bootstrap_95_percent_interval": [
+            -3.5875,
+            -2.0125
+          ],
+          "by_scenario": {
+            "comms_loss": -2.125,
+            "coordinator_restart": -3.5625,
+            "nominal": -3.5625,
+            "stale_sensor": -1.875,
+            "unit_loss": -2.625
+          },
+          "layout_mean_differences": {
+            "11000": -3.2,
+            "11001": -2.4,
+            "11002": -4.8,
+            "11003": -3.6,
+            "11004": -2.8,
+            "11005": -2.6,
+            "11006": -1,
+            "11007": -2.6,
+            "11008": -1.2,
+            "11009": -2,
+            "11010": -2.2,
+            "11011": -0.2,
+            "11012": -1.4,
+            "11013": -4.6,
+            "11014": -2.4,
+            "11015": -7
+          },
+          "layouts_faster_or_shorter": 16,
+          "layouts_slower_or_longer": 0,
+          "layouts_tied": 0,
+          "mean_paired_difference": -2.75
+        }
+      },
+      "learned-balanced": {
+        "distance_travelled": {
+          "bootstrap_95_percent_interval": [
+            -43.19759812499999,
+            -21.9863121875
+          ],
+          "by_scenario": {
+            "comms_loss": -31.189750000000007,
+            "coordinator_restart": -36.0818125,
+            "nominal": -36.0818125,
+            "stale_sensor": -35.4515625,
+            "unit_loss": -22.49718749999999
+          },
+          "layout_mean_differences": {
+            "11000": -54.7078,
+            "11001": -25.60019999999999,
+            "11002": -55.250800000000005,
+            "11003": -42.86800000000001,
+            "11004": -43.78880000000002,
+            "11005": -14.070799999999997,
+            "11006": -22.02759999999997,
+            "11007": 0.7320000000000164,
+            "11008": -11.817599999999993,
+            "11009": -11.974799999999998,
+            "11010": -40.98419999999999,
+            "11011": -17.841199999999994,
+            "11012": -19.11800000000003,
+            "11013": -63.997999999999955,
+            "11014": -15.639600000000007,
+            "11015": -77.21140000000003
+          },
+          "layouts_faster_or_shorter": 15,
+          "layouts_slower_or_longer": 1,
+          "layouts_tied": 0,
+          "mean_paired_difference": -32.260425
+        },
+        "ticks": {
+          "bootstrap_95_percent_interval": [
+            -3.175,
+            -1.8875
+          ],
+          "by_scenario": {
+            "comms_loss": -1.625,
+            "coordinator_restart": -2.9375,
+            "nominal": -2.9375,
+            "stale_sensor": -2.0625,
+            "unit_loss": -2.875
+          },
+          "layout_mean_differences": {
+            "11000": -3,
+            "11001": -2.4,
+            "11002": -2.2,
+            "11003": -3.6,
+            "11004": -4.2,
+            "11005": -1,
+            "11006": -1,
+            "11007": -2.4,
+            "11008": -1.2,
+            "11009": -2,
+            "11010": -2.2,
+            "11011": -0.6,
+            "11012": -2.2,
+            "11013": -3.4,
+            "11014": -2.4,
+            "11015": -6
+          },
+          "layouts_faster_or_shorter": 16,
+          "layouts_slower_or_longer": 0,
+          "layouts_tied": 0,
+          "mean_paired_difference": -2.4875000000000003
+        }
+      },
+      "nearest-task": {
+        "distance_travelled": {
+          "bootstrap_95_percent_interval": [
+            -42.4822978125,
+            -23.242105000000006
+          ],
+          "by_scenario": {
+            "comms_loss": -29.5971875,
+            "coordinator_restart": -39.96581249999999,
+            "nominal": -39.96581249999999,
+            "stale_sensor": -37.304249999999996,
+            "unit_loss": -15.817249999999987
+          },
+          "layout_mean_differences": {
+            "11000": -44.393399999999986,
+            "11001": -25.99819999999998,
+            "11002": -51.717,
+            "11003": -42.86800000000001,
+            "11004": -45.745200000000025,
+            "11005": -14.070799999999997,
+            "11006": -28.28539999999997,
+            "11007": -18.88019999999999,
+            "11008": -0.7393999999999779,
+            "11009": -5.101400000000007,
+            "11010": -30.748399999999993,
+            "11011": -23.545399999999983,
+            "11012": -28.80600000000002,
+            "11013": -60.51659999999997,
+            "11014": -21.85419999999998,
+            "11015": -77.21140000000003
+          },
+          "layouts_faster_or_shorter": 16,
+          "layouts_slower_or_longer": 0,
+          "layouts_tied": 0,
+          "mean_paired_difference": -32.53006249999999
+        },
+        "ticks": {
+          "bootstrap_95_percent_interval": [
+            -3.75,
+            -2.375
+          ],
+          "by_scenario": {
+            "comms_loss": -3.1875,
+            "coordinator_restart": -3.625,
+            "nominal": -3.625,
+            "stale_sensor": -2.3125,
+            "unit_loss": -2.5625
+          },
+          "layout_mean_differences": {
+            "11000": -3.4,
+            "11001": -3.6,
+            "11002": -2.6,
+            "11003": -3.6,
+            "11004": -4.4,
+            "11005": -1,
+            "11006": -3.2,
+            "11007": -4,
+            "11008": -1.8,
+            "11009": -0.8,
+            "11010": -3.4,
+            "11011": -0.6,
+            "11012": -2.8,
+            "11013": -3.4,
+            "11014": -4.4,
+            "11015": -6
+          },
+          "layouts_faster_or_shorter": 16,
+          "layouts_slower_or_longer": 0,
+          "layouts_tied": 0,
+          "mean_paired_difference": -3.0625
+        }
+      }
+    },
+    "difference_direction": "mission-workload minus baseline; negative favors candidate",
+    "independent_layout_count": 16,
+    "resampling_unit": "layout seed"
+  },
+  "scenarios": [
+    "nominal",
+    "unit_loss",
+    "comms_loss",
+    "stale_sensor",
+    "coordinator_restart"
+  ],
+  "schema": "mapping-benchmark-snapshot/v2",
+  "source_file_sha256": {
+    "__init__.py": "0e770fe4df4dc1c12695ddb762f432c18c6ef75c9d4fb02f00bd89989eaff43b",
+    "audit.py": "35c1fc99a0ff1da12633ed70f043e14e0b78da92136e9ee98ffbe44efc02962b",
+    "benchmark_mapping_allocators.py": "4ea5683bf45d5cf39d72596f06b95fca88e7e0472308f9b6ffd9ab6e8f2c18f4",
+    "configuration.py": "6db72a9eba29892dc597f7f10ed2f31ce7e91ca3afbf8c4d3e8eec98aaeea9f3",
+    "geometry.py": "5ed3f6cb44b48328c08fb0f81c8955c6af5906006e8c5201ee762a920b19bf93",
+    "health.py": "6b0ee3c06f417703adc67b17251805451ede73cc1ff1c50cf5b93565f1d895f6",
+    "integrity.py": "7c43492f099607826210e0f5a8cc9faf18bd45d20ab9c10769c6ac7d7a01f851",
+    "lifecycle.py": "45663e8c90280a9e164f7de2d9924a3353ba910aed66e05425076201ab91309b",
+    "mapping_allocation.py": "33fd00b3308a16abe89c341ecf382ffa7152405976e6940bf379a8f43b7c14c7",
+    "mapping_allocator.py": "364387b5643856258e5ceca6b1ac7d968d6bcf106e1356fae7bc90ecc43edb3e",
+    "mapping_mission.py": "f5b8699e4c1f2e451eeb493512ad7fb4a35b4ca3c4188b3a52b39233e9664ad2",
+    "mapping_tasks.py": "aac042b219dd8c8b71c7089b473077729a3a14d158e81fe84d377f2474d4b008",
+    "missions.py": "c622500594ee0fc0f5f5d6c6d31df4e0928c195117352467ef9f6699d5b4cb19",
+    "operational.py": "e417b57a08cc84248a7e5629af67f350911e812f7e8d42058f60e03a741a84e2",
+    "workload_allocator.py": "44abe8386fa937d826b821032c907df51ec0ba42a0509fa182b5fde1dfdbaa0d"
+  },
+  "source_revision": "92286eaec5d45b33601c2618af4d1bb4f5bbea30",
+  "source_working_tree_dirty": true,
+  "summary": {
+    "analytic-balanced": {
+      "boundary_violations": 0,
+      "completion_rate": 1,
+      "duplicate_visits": 0,
+      "max_proposal_seconds": 0.009610300010535866,
+      "mean_distance": 389.1006625,
+      "mean_planning_seconds_per_mission": 0.0029230775056930725,
+      "mean_ticks": 25.7625,
+      "mission_count": 80
+    },
+    "learned-balanced": {
+      "boundary_violations": 0,
+      "completion_rate": 1,
+      "duplicate_visits": 0,
+      "max_proposal_seconds": 0.008871299971360713,
+      "mean_distance": 381.8537,
+      "mean_planning_seconds_per_mission": 0.002989991252979962,
+      "mean_ticks": 25.5,
+      "mission_count": 80
+    },
+    "mission-workload": {
+      "boundary_violations": 0,
+      "completion_rate": 1,
+      "duplicate_visits": 0,
+      "max_proposal_seconds": 1.7991737999836914,
+      "mean_distance": 349.593275,
+      "mean_planning_seconds_per_mission": 0.4573406924937444,
+      "mean_ticks": 23.0125,
+      "mission_count": 80
+    },
+    "nearest-task": {
+      "boundary_violations": 0,
+      "completion_rate": 1,
+      "duplicate_visits": 0,
+      "max_proposal_seconds": 0.00012139999307692051,
+      "mean_distance": 382.1233375,
+      "mean_planning_seconds_per_mission": 0.00018901750154327602,
+      "mean_ticks": 26.075,
+      "mission_count": 80
+    }
+  },
+  "training": {
+    "coefficients": [
+      1.0021988532330393,
+      0.9943331303812107,
+      0.5023509595417325,
+      -0.01580938263511669
+    ],
+    "examples_per_seed": 40,
+    "feature_schema": "mapping-duration/v1:arrival_seconds,route_seconds,samples_remaining,intercept",
+    "model_type": "ridge-regression",
+    "regularisation": 0.000001,
+    "target": "Exact task ticks under the abstract straight-line movement model",
+    "training_mae_ticks": 0.38067135167990485,
+    "training_seeds": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39,
+      40,
+      41,
+      42,
+      43,
+      44,
+      45,
+      46,
+      47,
+      48,
+      49,
+      50,
+      51,
+      52,
+      53,
+      54,
+      55,
+      56,
+      57,
+      58,
+      59,
+      60,
+      61,
+      62,
+      63
+    ],
+    "validation_mae_ticks": 0.38176947725252736,
+    "validation_seeds": [
+      500,
+      501,
+      502,
+      503,
+      504,
+      505,
+      506,
+      507,
+      508,
+      509,
+      510,
+      511,
+      512,
+      513,
+      514,
+      515
+    ]
+  },
+  "original_report_schema": "mapping-benchmark/v2",
+  "original_report_sha256": "27d02cc4f388e8654b6826f72426abadce60c7f72bbb2189cb94117d40db961b",
+  "provenance_note": "Fixed remaining-work planner evaluated once on the predefined independent cohort. Source hashes identify the measured working tree before this commit. Learned comparator bytes were unchanged; full replay journals remain local and excluded from Git.",
+  "layouts": [
+    {
+      "columns": 4,
+      "height": 38.50447232921749,
+      "positions": [
+        {
+          "x": 0.7738677011774932,
+          "y": 11.1859735567018
+        },
+        {
+          "x": 19.87931431882251,
+          "y": 13.711213139015454
+        },
+        {
+          "x": 39.715027460720044,
+          "y": 26.602131989410406
+        }
+      ],
+      "rows": 3,
+      "seed": 11000,
+      "speeds": [
+        11.735749826713928,
+        11.677820763951217,
+        4.318756632311323
+      ],
+      "width": 41.87110957257577
+    },
+    {
+      "columns": 4,
+      "height": 33.425883999526384,
+      "positions": [
+        {
+          "x": 19.170886059160093,
+          "y": 18.162947693909615
+        },
+        {
+          "x": 40.22286994116839,
+          "y": 0.4688616659103532
+        },
+        {
+          "x": 15.50089957603974,
+          "y": 0.44824343826463026
+        }
+      ],
+      "rows": 2,
+      "seed": 11001,
+      "speeds": [
+        11.25931402590955,
+        5.883946712372699,
+        7.833116185672457
+      ],
+      "width": 51.54269823784374
+    },
+    {
+      "columns": 3,
+      "height": 48.154264293383406,
+      "positions": [
+        {
+          "x": 21.343349915854784,
+          "y": 24.55085800533258
+        },
+        {
+          "x": 24.357025739569796,
+          "y": 30.29382981076575
+        },
+        {
+          "x": 60.82170163443849,
+          "y": 17.89347196490748
+        }
+      ],
+      "rows": 3,
+      "seed": 11002,
+      "speeds": [
+        7.628773173755201,
+        10.303724428618581,
+        9.89021284975606
+      ],
+      "width": 82.54969967107274
+    },
+    {
+      "columns": 2,
+      "height": 59.65787628985915,
+      "positions": [
+        {
+          "x": 88.85313848496747,
+          "y": 13.441198408386809
+        },
+        {
+          "x": 89.29235944125752,
+          "y": 30.74118669865002
+        },
+        {
+          "x": 44.74494763271124,
+          "y": 39.70143130052699
+        }
+      ],
+      "rows": 3,
+      "seed": 11003,
+      "speeds": [
+        9.086997748865457,
+        7.427140723567598,
+        10.486549355765156
+      ],
+      "width": 89.66441567047457
+    },
+    {
+      "columns": 4,
+      "height": 33.09288952798463,
+      "positions": [
+        {
+          "x": 3.4705053183406047,
+          "y": 5.471745174899094
+        },
+        {
+          "x": 31.832429883077108,
+          "y": 12.785831104773429
+        },
+        {
+          "x": 58.49810464776164,
+          "y": 10.329315566910854
+        }
+      ],
+      "rows": 3,
+      "seed": 11004,
+      "speeds": [
+        5.978117038589788,
+        5.629167421659324,
+        11.656938405504015
+      ],
+      "width": 72.74648973442554
+    },
+    {
+      "columns": 3,
+      "height": 48.234353685905205,
+      "positions": [
+        {
+          "x": 44.91313847133478,
+          "y": 29.1672839869206
+        },
+        {
+          "x": 53.12983360500384,
+          "y": 2.2579811708755635
+        },
+        {
+          "x": 31.182818828955032,
+          "y": 17.711220216834928
+        }
+      ],
+      "rows": 2,
+      "seed": 11005,
+      "speeds": [
+        6.251698607877653,
+        10.018822527959218,
+        7.276273908512285
+      ],
+      "width": 67.52921960875803
+    },
+    {
+      "columns": 2,
+      "height": 36.046275311693364,
+      "positions": [
+        {
+          "x": 17.796443936865874,
+          "y": 30.221484702502433
+        },
+        {
+          "x": 5.7660860113601355,
+          "y": 14.781422907343138
+        },
+        {
+          "x": 71.4969103707486,
+          "y": 12.394896002057397
+        }
+      ],
+      "rows": 2,
+      "seed": 11006,
+      "speeds": [
+        6.481382545744998,
+        11.556871280239516,
+        10.683092590732592
+      ],
+      "width": 80.60118058701062
+    },
+    {
+      "columns": 2,
+      "height": 58.68226704817394,
+      "positions": [
+        {
+          "x": 6.0436797005227545,
+          "y": 10.934960255831914
+        },
+        {
+          "x": 41.2832723309279,
+          "y": 57.11542067350925
+        },
+        {
+          "x": 33.84950590106185,
+          "y": 11.71096897818282
+        }
+      ],
+      "rows": 3,
+      "seed": 11007,
+      "speeds": [
+        4.450128193590982,
+        10.675366879097629,
+        7.979436034520372
+      ],
+      "width": 55.86894938293339
+    },
+    {
+      "columns": 2,
+      "height": 28.565059428667485,
+      "positions": [
+        {
+          "x": 20.73623395172396,
+          "y": 17.620621791167455
+        },
+        {
+          "x": 26.64880260240744,
+          "y": 11.80202115819256
+        },
+        {
+          "x": 27.84315701322878,
+          "y": 17.22638553625967
+        }
+      ],
+      "rows": 3,
+      "seed": 11008,
+      "speeds": [
+        9.111765171882203,
+        7.476915062217486,
+        7.314977154950877
+      ],
+      "width": 60.98755207174265
+    },
+    {
+      "columns": 3,
+      "height": 37.95307115097138,
+      "positions": [
+        {
+          "x": 11.337179171807954,
+          "y": 8.824784322637855
+        },
+        {
+          "x": 38.539930350830375,
+          "y": 26.869108086287206
+        },
+        {
+          "x": 12.755942084590535,
+          "y": 27.7766687609632
+        }
+      ],
+      "rows": 2,
+      "seed": 11009,
+      "speeds": [
+        9.595507220957485,
+        6.222921664813907,
+        4.802235055558047
+      ],
+      "width": 45.94036476520163
+    },
+    {
+      "columns": 4,
+      "height": 51.476889553244874,
+      "positions": [
+        {
+          "x": 25.398204591503173,
+          "y": 6.674471196668682
+        },
+        {
+          "x": 8.609531811664757,
+          "y": 31.633719496110817
+        },
+        {
+          "x": 8.07009304176826,
+          "y": 8.10689868227129
+        }
+      ],
+      "rows": 2,
+      "seed": 11010,
+      "speeds": [
+        11.602375473928047,
+        10.16898495759255,
+        7.567420198631199
+      ],
+      "width": 61.02886586364706
+    },
+    {
+      "columns": 2,
+      "height": 30.471736100821616,
+      "positions": [
+        {
+          "x": 34.420229799620884,
+          "y": 19.699345048604297
+        },
+        {
+          "x": 41.11571449918116,
+          "y": 11.046355877644329
+        },
+        {
+          "x": 39.79902530794519,
+          "y": 29.47382609215885
+        }
+      ],
+      "rows": 3,
+      "seed": 11011,
+      "speeds": [
+        7.116700323923128,
+        7.607170774976192,
+        7.809532277020842
+      ],
+      "width": 55.024624288910914
+    },
+    {
+      "columns": 2,
+      "height": 50.88401853091818,
+      "positions": [
+        {
+          "x": 19.161475938188854,
+          "y": 27.712231542893715
+        },
+        {
+          "x": 36.94753083707142,
+          "y": 22.196974782561455
+        },
+        {
+          "x": 68.01096391700976,
+          "y": 31.06635021972772
+        }
+      ],
+      "rows": 2,
+      "seed": 11012,
+      "speeds": [
+        7.803308270005019,
+        10.711429842040847,
+        11.457763754771449
+      ],
+      "width": 83.90040793397424
+    },
+    {
+      "columns": 4,
+      "height": 47.009034554137,
+      "positions": [
+        {
+          "x": 7.963023531947284,
+          "y": 21.225741799954783
+        },
+        {
+          "x": 2.347085479622817,
+          "y": 13.284049012925951
+        },
+        {
+          "x": 28.7371643266691,
+          "y": 17.390516044076477
+        }
+      ],
+      "rows": 3,
+      "seed": 11013,
+      "speeds": [
+        7.973383943464169,
+        8.177109887177448,
+        8.972918429889411
+      ],
+      "width": 89.26007172373522
+    },
+    {
+      "columns": 4,
+      "height": 35.71335640301143,
+      "positions": [
+        {
+          "x": 40.81697481656301,
+          "y": 20.109113427564804
+        },
+        {
+          "x": 25.17981042416322,
+          "y": 21.492549204042103
+        },
+        {
+          "x": 43.54022871657915,
+          "y": 29.600366637878377
+        }
+      ],
+      "rows": 2,
+      "seed": 11014,
+      "speeds": [
+        7.9723099826731945,
+        9.269569746351111,
+        4.4813831148271515
+      ],
+      "width": 49.98521147260729
+    },
+    {
+      "columns": 4,
+      "height": 57.66199600353042,
+      "positions": [
+        {
+          "x": 37.09991772782193,
+          "y": 56.14342153968907
+        },
+        {
+          "x": 26.14822961231545,
+          "y": 29.92366758464171
+        },
+        {
+          "x": 5.400892836143924,
+          "y": 0.8571999653143683
+        }
+      ],
+      "rows": 3,
+      "seed": 11015,
+      "speeds": [
+        5.774141732242151,
+        10.282180229646375,
+        9.786594588793381
+      ],
+      "width": 57.07475693030074
+    }
+  ],
+  "measurement_columns": [
+    "seed",
+    "scenario",
+    "allocator",
+    "result.command_count",
+    "result.completed",
+    "result.completed_tasks",
+    "result.distance_travelled",
+    "result.duplicate_visits",
+    "result.expired_assignments",
+    "result.recovery_delay_seconds",
+    "result.rejected_intents",
+    "result.scenario",
+    "result.stale_assignment_rejections",
+    "result.ticks",
+    "result.total_samples",
+    "result.total_tasks",
+    "result.visited_samples",
+    "boundary_violations",
+    "planning_wall_time.calls",
+    "planning_wall_time.total_seconds",
+    "planning_wall_time.max_seconds"
+  ],
+  "measurements": [
+    [11000,"nominal","nearest-task",66,true,12,382.376,0,0,null,0,"nominal",0,24,48,12,48,0,6,0.00027869996847584844,0.00007969996659085155],
+    [11000,"nominal","analytic-balanced",66,true,12,381.379,0,0,null,0,"nominal",0,24,48,12,48,0,6,0.00966310000512749,0.00761850003618747],
+    [11000,"nominal","learned-balanced",66,true,12,382.376,0,0,null,0,"nominal",0,24,48,12,48,0,6,0.011411899933591485,0.008871299971360713],
+    [11000,"nominal","mission-workload",64,true,12,324.749,0,0,null,0,"nominal",0,22,48,12,48,0,6,1.8135861999471672,1.7388128999737091],
+    [11000,"unit_loss","nearest-task",77,true,12,351.311,0,1,16,0,"unit_loss",0,39,48,12,48,0,10,0.0003948998637497425,0.0000944999628700316],
+    [11000,"unit_loss","analytic-balanced",79,true,12,396.005,0,1,6,0,"unit_loss",0,39,48,12,48,0,10,0.008448000065982342,0.007450699980836362],
+    [11000,"unit_loss","learned-balanced",79,true,12,375.103,0,1,6,0,"unit_loss",0,39,48,12,48,0,10,0.006430399953387678,0.005416399973910302],
+    [11000,"unit_loss","mission-workload",71,true,12,332.642,0,1,26,0,"unit_loss",0,35,48,12,48,0,11,1.6673831000225618,1.6252265999792144],
+    [11000,"comms_loss","nearest-task",72,true,12,366.731,0,1,10,0,"comms_loss",1,30,48,12,48,0,8,0.0002786000841297209,0.00007120001828297973],
+    [11000,"comms_loss","analytic-balanced",74,true,12,404.59,0,1,6,0,"comms_loss",1,29,48,12,48,0,9,0.011068600113503635,0.00701689999550581],
+    [11000,"comms_loss","learned-balanced",74,true,12,390.216,0,1,6,0,"comms_loss",1,28,48,12,48,0,8,0.009092300082556903,0.006140000012237579],
+    [11000,"comms_loss","mission-workload",61,true,12,321.948,0,1,16,0,"comms_loss",1,25,48,12,48,0,12,1.6930138001334853,1.595736300048884],
+    [11000,"stale_sensor","nearest-task",72,true,12,370.113,0,0,null,5,"stale_sensor",0,30,48,12,48,0,7,0.0003027999773621559,0.00006360001862049103],
+    [11000,"stale_sensor","analytic-balanced",73,true,12,394.214,0,0,null,5,"stale_sensor",0,30,48,12,48,0,9,0.006286600022576749,0.005330000014510006],
+    [11000,"stale_sensor","learned-balanced",72,true,12,374.408,0,0,null,5,"stale_sensor",0,30,48,12,48,0,7,0.007181899971328676,0.006183399993460625],
+    [11000,"stale_sensor","mission-workload",67,true,12,326.852,0,0,null,5,"stale_sensor",0,26,48,12,48,0,9,1.876739399973303,1.7738254999858327],
+    [11000,"coordinator_restart","nearest-task",66,true,12,382.376,0,0,null,0,"coordinator_restart",0,24,48,12,48,0,6,0.00021330005256459117,0.00005460000829771161],
+    [11000,"coordinator_restart","analytic-balanced",66,true,12,381.379,0,0,null,0,"coordinator_restart",0,24,48,12,48,0,6,0.00938450003741309,0.007115400047041476],
+    [11000,"coordinator_restart","learned-balanced",66,true,12,382.376,0,0,null,0,"coordinator_restart",0,24,48,12,48,0,6,0.007984100026078522,0.005669700040016323],
+    [11000,"coordinator_restart","mission-workload",64,true,12,324.749,0,0,null,0,"coordinator_restart",0,22,48,12,48,0,6,1.78698750003241,1.712862699991092],
+    [11001,"nominal","nearest-task",49,true,8,271.092,0,0,null,0,"nominal",0,19,32,8,32,0,6,0.00018229999113827944,0.000057500030379742384],
+    [11001,"nominal","analytic-balanced",49,true,8,275.138,0,0,null,0,"nominal",0,19,32,8,32,0,6,0.001720300002489239,0.0013993000029586256],
+    [11001,"nominal","learned-balanced",49,true,8,275.138,0,0,null,0,"nominal",0,19,32,8,32,0,6,0.00166379997972399,0.0013709000195376575],
+    [11001,"nominal","mission-workload",46,true,8,250.495,0,0,null,0,"nominal",0,17,32,8,32,0,6,0.03469749999931082,0.030719999980647117],
+    [11001,"unit_loss","nearest-task",57,true,8,287.205,0,1,9,0,"unit_loss",0,31,32,8,32,0,6,0.00022240006364881992,0.0000847000046633184],
+    [11001,"unit_loss","analytic-balanced",57,true,8,282.67,0,1,3,0,"unit_loss",0,31,32,8,32,0,6,0.0023882000241428614,0.0019125000108033419],
+    [11001,"unit_loss","learned-balanced",59,true,8,295.499,0,1,3,0,"unit_loss",0,31,32,8,32,0,6,0.0025607000570744276,0.0021084000472910702],
+    [11001,"unit_loss","mission-workload",54,true,8,261.49,0,1,23,0,"unit_loss",0,27,32,8,32,0,7,0.028045599930919707,0.024959500005934387],
+    [11001,"comms_loss","nearest-task",56,true,8,294.154,0,1,9,0,"comms_loss",1,29,32,8,32,0,7,0.00022170011652633548,0.00004870002157986164],
+    [11001,"comms_loss","analytic-balanced",50,true,8,271.732,0,1,3,0,"comms_loss",1,23,32,8,32,0,7,0.0018420000560581684,0.0014099000254645944],
+    [11001,"comms_loss","learned-balanced",50,true,8,271.732,0,1,3,0,"comms_loss",1,23,32,8,32,0,7,0.001966400013770908,0.0013859999598935246],
+    [11001,"comms_loss","mission-workload",47,true,8,251.669,0,1,6,0,"comms_loss",1,20,32,8,32,0,7,0.024808400019537657,0.021223700023256242],
+    [11001,"stale_sensor","nearest-task",49,true,8,271.092,0,0,null,5,"stale_sensor",0,20,32,8,32,0,6,0.00016270001651719213,0.00003809999907389283],
+    [11001,"stale_sensor","analytic-balanced",49,true,8,275.138,0,0,null,5,"stale_sensor",0,20,32,8,32,0,6,0.0017036000499501824,0.0013887000386603177],
+    [11001,"stale_sensor","learned-balanced",49,true,8,275.138,0,0,null,5,"stale_sensor",0,20,32,8,32,0,6,0.0017290999530814588,0.001435500045772642],
+    [11001,"stale_sensor","mission-workload",46,true,8,250.495,0,0,null,5,"stale_sensor",0,19,32,8,32,0,6,0.025863300019409508,0.02280599996447563],
+    [11001,"coordinator_restart","nearest-task",49,true,8,271.092,0,0,null,0,"coordinator_restart",0,19,32,8,32,0,6,0.00018400006229057908,0.000049400026910007],
+    [11001,"coordinator_restart","analytic-balanced",49,true,8,275.138,0,0,null,0,"coordinator_restart",0,19,32,8,32,0,6,0.0017172000370919704,0.0013868000241927803],
+    [11001,"coordinator_restart","learned-balanced",49,true,8,275.138,0,0,null,0,"coordinator_restart",0,19,32,8,32,0,6,0.0026339999749325216,0.002299299987498671],
+    [11001,"coordinator_restart","mission-workload",46,true,8,250.495,0,0,null,0,"coordinator_restart",0,17,32,8,32,0,6,0.025851299928035587,0.02275160001590848],
+    [11002,"nominal","nearest-task",73,true,9,501.351,0,0,null,0,"nominal",0,28,36,9,36,0,7,0.00022400007583200932,0.000044899992644786835],
+    [11002,"nominal","analytic-balanced",78,true,9,550.66,0,0,null,0,"nominal",0,32,36,9,36,0,7,0.0037717001396231353,0.003334100008942187],
+    [11002,"nominal","learned-balanced",73,true,9,501.351,0,0,null,0,"nominal",0,28,36,9,36,0,7,0.0026135999942198396,0.002135200018528849],
+    [11002,"nominal","mission-workload",65,true,9,435.211,0,0,null,0,"nominal",0,26,36,9,36,0,7,0.06837979989359155,0.06285069999285042],
+    [11002,"unit_loss","nearest-task",72,true,9,542.276,0,1,5,0,"unit_loss",0,37,36,9,36,0,8,0.0002641999162733555,0.00005339999916031957],
+    [11002,"unit_loss","analytic-balanced",70,true,9,535.467,0,1,5,0,"unit_loss",0,39,36,9,36,0,8,0.0028176999767310917,0.0020990000339224935],
+    [11002,"unit_loss","learned-balanced",72,true,9,551.111,0,1,4,0,"unit_loss",0,35,36,9,36,0,8,0.002809799974784255,0.0023182000149972737],
+    [11002,"unit_loss","mission-workload",64,true,9,482.549,0,1,6,0,"unit_loss",0,34,36,9,36,0,8,0.06764039996778592,0.06161279999651015],
+    [11002,"comms_loss","nearest-task",70,true,9,491.247,0,1,5,0,"comms_loss",1,27,36,9,36,0,8,0.0002582999295555055,0.00005169998621568084],
+    [11002,"comms_loss","analytic-balanced",73,true,9,528.47,0,1,5,0,"comms_loss",1,31,36,9,36,0,8,0.0035067001590505242,0.00296920002438128],
+    [11002,"comms_loss","learned-balanced",70,true,9,500.081,0,1,4,0,"comms_loss",1,27,36,9,36,0,8,0.004121700127143413,0.003500899998471141],
+    [11002,"comms_loss","mission-workload",67,true,9,476.486,0,1,6,0,"comms_loss",1,27,36,9,36,0,7,0.07930599997052923,0.06836769997607917],
+    [11002,"stale_sensor","nearest-task",74,true,9,528.303,0,0,null,5,"stale_sensor",0,33,36,9,36,0,7,0.00025269994512200356,0.00006230000872164965],
+    [11002,"stale_sensor","analytic-balanced",73,true,9,531.608,0,0,null,5,"stale_sensor",0,30,36,9,36,0,7,0.0032693000393919647,0.0028119999915361404],
+    [11002,"stale_sensor","learned-balanced",74,true,9,528.303,0,0,null,5,"stale_sensor",0,33,36,9,36,0,7,0.003250200068578124,0.0028222999535501003],
+    [11002,"stale_sensor","mission-workload",67,true,9,476.486,0,0,null,5,"stale_sensor",0,27,36,9,36,0,7,0.09101910004392266,0.08517850004136562],
+    [11002,"coordinator_restart","nearest-task",73,true,9,501.351,0,0,null,0,"coordinator_restart",0,28,36,9,36,0,7,0.00019940000493079424,0.00005280005279928446],
+    [11002,"coordinator_restart","analytic-balanced",78,true,9,550.66,0,0,null,0,"coordinator_restart",0,32,36,9,36,0,7,0.0024750999873504043,0.0020747000235132873],
+    [11002,"coordinator_restart","learned-balanced",73,true,9,501.351,0,0,null,0,"coordinator_restart",0,28,36,9,36,0,7,0.004251400008797646,0.003804899984970689],
+    [11002,"coordinator_restart","mission-workload",65,true,9,435.211,0,0,null,0,"coordinator_restart",0,26,36,9,36,0,7,0.09647040005074814,0.0888717999914661],
+    [11003,"nominal","nearest-task",80,true,6,554.37,0,0,null,0,"nominal",0,33,24,6,24,0,4,0.00009479990694671869,0.000037999998312443495],
+    [11003,"nominal","analytic-balanced",82,true,6,576.059,0,0,null,0,"nominal",0,35,24,6,24,0,4,0.0009815000230446458,0.0008231000392697752],
+    [11003,"nominal","learned-balanced",80,true,6,554.37,0,0,null,0,"nominal",0,33,24,6,24,0,4,0.000791100028436631,0.0006174000445753336],
+    [11003,"nominal","mission-workload",72,true,6,498.791,0,0,null,0,"nominal",0,27,24,6,24,0,4,0.0034566999529488385,0.0028504999936558306],
+    [11003,"unit_loss","nearest-task",80,true,6,544.464,0,1,13,0,"unit_loss",0,47,24,6,24,0,5,0.0001710000797174871,0.00006739998934790492],
+    [11003,"unit_loss","analytic-balanced",75,true,6,553.059,0,1,7,0,"unit_loss",0,41,24,6,24,0,5,0.0009009999921545386,0.0006426000036299229],
+    [11003,"unit_loss","learned-balanced",80,true,6,544.464,0,1,13,0,"unit_loss",0,47,24,6,24,0,5,0.0010841999319382012,0.0007822999614290893],
+    [11003,"unit_loss","mission-workload",72,true,6,532.791,0,1,29,0,"unit_loss",0,43,24,6,24,0,9,0.004084400075953454,0.0025562000228092074],
+    [11003,"comms_loss","nearest-task",79,true,6,546.442,0,1,6,0,"comms_loss",1,32,24,6,24,0,5,0.0001379000023007393,0.000037400051951408386],
+    [11003,"comms_loss","analytic-balanced",80,true,6,562.964,0,1,6,0,"comms_loss",1,33,24,6,24,0,5,0.0009033000678755343,0.0006540000322274864],
+    [11003,"comms_loss","learned-balanced",79,true,6,546.442,0,1,6,0,"comms_loss",1,32,24,6,24,0,5,0.0011698001180775464,0.0008909000316634774],
+    [11003,"comms_loss","mission-workload",70,true,6,502.584,0,1,6,0,"comms_loss",1,31,24,6,24,0,6,0.0049928000080399215,0.003317900002002716],
+    [11003,"stale_sensor","nearest-task",79,true,6,546.442,0,0,null,5,"stale_sensor",0,32,24,6,24,0,4,0.00011019996600225568,0.0000371999922208488],
+    [11003,"stale_sensor","analytic-balanced",80,true,6,562.964,0,0,null,5,"stale_sensor",0,33,24,6,24,0,4,0.0007735000108368695,0.0005614000256173313],
+    [11003,"stale_sensor","learned-balanced",79,true,6,546.442,0,0,null,5,"stale_sensor",0,32,24,6,24,0,4,0.0010944000096060336,0.0008989000343717635],
+    [11003,"stale_sensor","mission-workload",72,true,6,498.791,0,0,null,5,"stale_sensor",0,31,24,6,24,0,4,0.003423199988901615,0.0026559000252746046],
+    [11003,"coordinator_restart","nearest-task",80,true,6,554.37,0,0,null,0,"coordinator_restart",0,33,24,6,24,0,4,0.00011570000788196921,0.00004569999873638153],
+    [11003,"coordinator_restart","analytic-balanced",82,true,6,576.059,0,0,null,0,"coordinator_restart",0,35,24,6,24,0,4,0.0011658999719657004,0.0009703999967314303],
+    [11003,"coordinator_restart","learned-balanced",80,true,6,554.37,0,0,null,0,"coordinator_restart",0,33,24,6,24,0,4,0.0010785999475046992,0.0008245999924838543],
+    [11003,"coordinator_restart","mission-workload",72,true,6,498.791,0,0,null,0,"coordinator_restart",0,27,24,6,24,0,4,0.003341900010127574,0.0026445999974384904],
+    [11004,"nominal","nearest-task",74,true,12,431.24,0,0,null,0,"nominal",0,28,48,12,48,0,10,0.0003899998846463859,0.00010000000474974513],
+    [11004,"nominal","analytic-balanced",76,true,12,440.447,0,0,null,0,"nominal",0,31,48,12,48,0,9,0.008034100115764886,0.007350800035055727],
+    [11004,"nominal","learned-balanced",74,true,12,431.24,0,0,null,0,"nominal",0,28,48,12,48,0,10,0.006189100036863238,0.005327599996235222],
+    [11004,"nominal","mission-workload",64,true,12,385.64,0,0,null,0,"nominal",0,26,48,12,48,0,11,1.7964302998734638,1.6721344999969006],
+    [11004,"unit_loss","nearest-task",73,true,12,455.24,0,1,27,0,"unit_loss",0,39,48,12,48,0,11,0.0004800001624971628,0.00006420002318918705],
+    [11004,"unit_loss","analytic-balanced",68,true,12,428.697,0,1,11,0,"unit_loss",0,34,48,12,48,0,10,0.00783469999441877,0.006825399992521852],
+    [11004,"unit_loss","learned-balanced",72,true,12,445.458,0,1,17,0,"unit_loss",0,38,48,12,48,0,11,0.007075600151438266,0.006110500020440668],
+    [11004,"unit_loss","mission-workload",66,true,12,414.894,0,1,12,0,"unit_loss",0,33,48,12,48,0,10,1.7789768999791704,1.7362787000020035],
+    [11004,"comms_loss","nearest-task",74,true,12,434.23,0,1,6,0,"comms_loss",1,32,48,12,48,0,10,0.0003711998579092324,0.00006429996574297547],
+    [11004,"comms_loss","analytic-balanced",71,true,12,421.846,0,1,6,0,"comms_loss",1,28,48,12,48,0,9,0.00723630003631115,0.0061852000071667135],
+    [11004,"comms_loss","learned-balanced",74,true,12,434.23,0,1,6,0,"comms_loss",1,32,48,12,48,0,10,0.008518599963281304,0.007333199959248304],
+    [11004,"comms_loss","mission-workload",64,true,12,385.64,0,1,6,0,"comms_loss",1,26,48,12,48,0,9,1.7517484999843873,1.6701297999825329],
+    [11004,"stale_sensor","nearest-task",74,true,12,434.23,0,0,null,5,"stale_sensor",0,32,48,12,48,0,10,0.0003711000899784267,0.00006170000415295362],
+    [11004,"stale_sensor","analytic-balanced",71,true,12,421.846,0,0,null,5,"stale_sensor",0,27,48,12,48,0,9,0.007225100009236485,0.006458899995777756],
+    [11004,"stale_sensor","learned-balanced",74,true,12,434.23,0,0,null,5,"stale_sensor",0,32,48,12,48,0,10,0.007744899892713875,0.006824999989476055],
+    [11004,"stale_sensor","mission-workload",64,true,12,385.64,0,0,null,5,"stale_sensor",0,26,48,12,48,0,11,1.8053477999637835,1.683906099991873],
+    [11004,"coordinator_restart","nearest-task",74,true,12,431.24,0,0,null,0,"coordinator_restart",0,28,48,12,48,0,10,0.00033379998058080673,0.00005169998621568084],
+    [11004,"coordinator_restart","analytic-balanced",76,true,12,440.447,0,0,null,0,"coordinator_restart",0,31,48,12,48,0,9,0.007042399898637086,0.0062815999845042825],
+    [11004,"coordinator_restart","learned-balanced",74,true,12,431.24,0,0,null,0,"coordinator_restart",0,28,48,12,48,0,10,0.007646400074008852,0.0068984999670647085],
+    [11004,"coordinator_restart","mission-workload",64,true,12,385.64,0,0,null,0,"coordinator_restart",0,26,48,12,48,0,11,1.846586799947545,1.7377630000119098],
+    [11005,"nominal","nearest-task",54,true,6,327.493,0,0,null,0,"nominal",0,18,24,6,24,0,3,0.00008570001227781177,0.000036400044336915016],
+    [11005,"nominal","analytic-balanced",56,true,6,345.295,0,0,null,0,"nominal",0,20,24,6,24,0,3,0.0008794000023044646,0.0007187000010162592],
+    [11005,"nominal","learned-balanced",54,true,6,327.493,0,0,null,0,"nominal",0,18,24,6,24,0,3,0.0006824000156484544,0.0005712999845854938],
+    [11005,"nominal","mission-workload",52,true,6,308.972,0,0,null,0,"nominal",0,18,24,6,24,0,3,0.004066900000907481,0.003603600023780018],
+    [11005,"unit_loss","nearest-task",54,true,6,342.578,0,1,5,0,"unit_loss",0,28,24,6,24,0,5,0.00015759997768327594,0.000051099981646984816],
+    [11005,"unit_loss","analytic-balanced",55,true,6,346.356,0,1,5,0,"unit_loss",0,29,24,6,24,0,5,0.0010026999516412616,0.000764199998229742],
+    [11005,"unit_loss","learned-balanced",54,true,6,342.578,0,1,5,0,"unit_loss",0,28,24,6,24,0,5,0.000951700028963387,0.0007057000184431672],
+    [11005,"unit_loss","mission-workload",54,true,6,337.535,0,1,5,0,"unit_loss",0,28,24,6,24,0,5,0.0034387000487186015,0.002545700001064688],
+    [11005,"comms_loss","nearest-task",55,true,6,342.21,0,1,5,0,"comms_loss",1,24,24,6,24,0,4,0.0001023999648168683,0.00003570003900676966],
+    [11005,"comms_loss","analytic-balanced",58,true,6,362.861,0,1,5,0,"comms_loss",1,25,24,6,24,0,4,0.0007957000634633005,0.0005759000196121633],
+    [11005,"comms_loss","learned-balanced",55,true,6,342.21,0,1,5,0,"comms_loss",1,24,24,6,24,0,4,0.001450899988412857,0.0012401999556459486],
+    [11005,"comms_loss","mission-workload",55,true,6,332.462,0,1,5,0,"comms_loss",1,22,24,6,24,0,5,0.006141200021374971,0.005230800015851855],
+    [11005,"stale_sensor","nearest-task",55,true,6,327.493,0,0,null,5,"stale_sensor",0,26,24,6,24,0,4,0.00010279996786266565,0.00003559998003765941],
+    [11005,"stale_sensor","analytic-balanced",57,true,6,339.37,0,0,null,5,"stale_sensor",0,28,24,6,24,0,4,0.0009464999893680215,0.0008077999809756875],
+    [11005,"stale_sensor","learned-balanced",55,true,6,327.493,0,0,null,5,"stale_sensor",0,26,24,6,24,0,4,0.00070830003824085,0.0005675000138580799],
+    [11005,"stale_sensor","mission-workload",52,true,6,308.972,0,0,null,5,"stale_sensor",0,23,24,6,24,0,4,0.004128000058699399,0.003479100007098168],
+    [11005,"coordinator_restart","nearest-task",54,true,6,327.493,0,0,null,0,"coordinator_restart",0,18,24,6,24,0,3,0.00008590001380071044,0.00003749999450519681],
+    [11005,"coordinator_restart","analytic-balanced",56,true,6,345.295,0,0,null,0,"coordinator_restart",0,20,24,6,24,0,3,0.0007467000395990908,0.0005881999968551099],
+    [11005,"coordinator_restart","learned-balanced",54,true,6,327.493,0,0,null,0,"coordinator_restart",0,18,24,6,24,0,3,0.0007600999670103192,0.0005605999613180757],
+    [11005,"coordinator_restart","mission-workload",52,true,6,308.972,0,0,null,0,"coordinator_restart",0,18,24,6,24,0,3,0.0029580999398604035,0.0025090999552048743],
+    [11006,"nominal","nearest-task",35,true,4,283.133,0,0,null,0,"nominal",0,15,16,4,16,0,2,0.00004339998122304678,0.00002759997732937336],
+    [11006,"nominal","analytic-balanced",35,true,4,283.133,0,0,null,0,"nominal",0,15,16,4,16,0,2,0.0002731000422500074,0.00023290002718567848],
+    [11006,"nominal","learned-balanced",35,true,4,283.133,0,0,null,0,"nominal",0,15,16,4,16,0,2,0.000208500016015023,0.00015999999595806003],
+    [11006,"nominal","mission-workload",26,true,4,248.961,0,0,null,0,"nominal",0,14,16,4,16,0,9,0.0022082000505179167,0.000520500005222857],
+    [11006,"unit_loss","nearest-task",27,true,4,252.772,0,1,4,0,"unit_loss",0,14,16,4,16,0,3,0.0000681999372318387,0.000026899971999228],
+    [11006,"unit_loss","analytic-balanced",27,true,4,252.772,0,1,4,0,"unit_loss",0,14,16,4,16,0,3,0.00031849998049438,0.0002182999742217362],
+    [11006,"unit_loss","learned-balanced",27,true,4,252.772,0,1,4,0,"unit_loss",0,14,16,4,16,0,3,0.0002576999249868095,0.00015739997616037726],
+    [11006,"unit_loss","mission-workload",26,true,4,248.961,0,0,null,0,"unit_loss",0,14,16,4,16,0,4,0.0010316000552847981,0.00046470004599541426],
+    [11006,"comms_loss","nearest-task",38,true,4,284.061,0,1,4,0,"comms_loss",1,25,16,4,16,0,3,0.00007190002361312509,0.00002989999484270811],
+    [11006,"comms_loss","analytic-balanced",27,true,4,252.772,0,1,4,0,"comms_loss",1,14,16,4,16,0,3,0.00024969998048618436,0.00016719999257475138],
+    [11006,"comms_loss","learned-balanced",27,true,4,252.772,0,1,4,0,"comms_loss",1,14,16,4,16,0,3,0.00027439999394118786,0.00016029999824240804],
+    [11006,"comms_loss","mission-workload",26,true,4,248.961,0,0,null,0,"comms_loss",0,14,16,4,16,0,4,0.0010237000533379614,0.0004773000255227089],
+    [11006,"stale_sensor","nearest-task",35,true,4,283.133,0,0,null,5,"stale_sensor",0,17,16,4,16,0,2,0.000047600013203918934,0.000028500042390078306],
+    [11006,"stale_sensor","analytic-balanced",35,true,4,283.133,0,0,null,5,"stale_sensor",0,17,16,4,16,0,2,0.0002918000682257116,0.0002493000356480479],
+    [11006,"stale_sensor","learned-balanced",35,true,4,283.133,0,0,null,5,"stale_sensor",0,17,16,4,16,0,2,0.0003073000116273761,0.0002674999996088445],
+    [11006,"stale_sensor","mission-workload",26,true,4,248.961,0,0,null,0,"stale_sensor",0,14,16,4,16,0,9,0.0021359999082051218,0.0007622999837622046],
+    [11006,"coordinator_restart","nearest-task",35,true,4,283.133,0,0,null,0,"coordinator_restart",0,15,16,4,16,0,2,0.00005830003647133708,0.00003170000854879618],
+    [11006,"coordinator_restart","analytic-balanced",35,true,4,283.133,0,0,null,0,"coordinator_restart",0,15,16,4,16,0,2,0.00029630004428327084,0.00023600005079060793],
+    [11006,"coordinator_restart","learned-balanced",35,true,4,283.133,0,0,null,0,"coordinator_restart",0,15,16,4,16,0,2,0.00019260001135990024,0.0001631999621167779],
+    [11006,"coordinator_restart","mission-workload",26,true,4,248.961,0,0,null,0,"coordinator_restart",0,14,16,4,16,0,9,0.0020418999483808875,0.0005177999846637249],
+    [11007,"nominal","nearest-task",63,true,6,342.158,0,0,null,0,"nominal",0,31,24,6,24,0,3,0.00008830009028315544,0.00003570003900676966],
+    [11007,"nominal","analytic-balanced",57,true,6,303.036,0,0,null,0,"nominal",0,27,24,6,24,0,3,0.0006955999997444451,0.0005412999889813364],
+    [11007,"nominal","learned-balanced",57,true,6,303.036,0,0,null,0,"nominal",0,27,24,6,24,0,3,0.000722200027666986,0.0005571999936364591],
+    [11007,"nominal","mission-workload",50,true,6,313.951,0,0,null,0,"nominal",0,22,24,6,24,0,6,0.005373199994210154,0.0044804000062868],
+    [11007,"unit_loss","nearest-task",47,true,6,325.681,0,1,5,0,"unit_loss",0,23,24,6,24,0,4,0.00013730005593970418,0.00006560003384947777],
+    [11007,"unit_loss","analytic-balanced",48,true,6,336.852,0,1,5,0,"unit_loss",0,24,24,6,24,0,4,0.0011220000451430678,0.0009188000112771988],
+    [11007,"unit_loss","learned-balanced",47,true,6,325.681,0,1,5,0,"unit_loss",0,23,24,6,24,0,4,0.0008184000034816563,0.0005738000036217272],
+    [11007,"unit_loss","mission-workload",47,true,6,325.681,0,1,5,0,"unit_loss",0,23,24,6,24,0,4,0.0038033000309951603,0.0029664000030606985],
+    [11007,"comms_loss","nearest-task",57,true,6,335.205,0,1,5,0,"comms_loss",1,24,24,6,24,0,4,0.00011460005771368742,0.000039300008211284876],
+    [11007,"comms_loss","analytic-balanced",57,true,6,335.717,0,1,5,0,"comms_loss",1,24,24,6,24,0,4,0.0007967000128701329,0.0005442000110633671],
+    [11007,"comms_loss","learned-balanced",57,true,6,335.205,0,1,5,0,"comms_loss",1,24,24,6,24,0,4,0.0009393999935127795,0.0006335999933071434],
+    [11007,"comms_loss","mission-workload",47,true,6,325.681,0,1,5,0,"comms_loss",1,23,24,6,24,0,10,0.005101999850012362,0.0032691999804228544],
+    [11007,"stale_sensor","nearest-task",53,true,6,342.414,0,0,null,5,"stale_sensor",0,23,24,6,24,0,3,0.00012360000982880592,0.00005540001438930631],
+    [11007,"stale_sensor","analytic-balanced",51,true,6,322.597,0,0,null,5,"stale_sensor",0,23,24,6,24,0,3,0.0010966999689117074,0.0009488000068813562],
+    [11007,"stale_sensor","learned-balanced",51,true,6,322.597,0,0,null,5,"stale_sensor",0,23,24,6,24,0,3,0.0007372000254690647,0.0005978000117465854],
+    [11007,"stale_sensor","mission-workload",50,true,6,313.951,0,0,null,5,"stale_sensor",0,22,24,6,24,0,4,0.0030854998622089624,0.002478199952747673],
+    [11007,"coordinator_restart","nearest-task",63,true,6,342.158,0,0,null,0,"coordinator_restart",0,31,24,6,24,0,3,0.00009910005610436201,0.00004210002953186631],
+    [11007,"coordinator_restart","analytic-balanced",57,true,6,303.036,0,0,null,0,"coordinator_restart",0,27,24,6,24,0,3,0.0007657000096514821,0.0005748000112362206],
+    [11007,"coordinator_restart","learned-balanced",57,true,6,303.036,0,0,null,0,"coordinator_restart",0,27,24,6,24,0,3,0.0020142000284977257,0.001819099998101592],
+    [11007,"coordinator_restart","mission-workload",50,true,6,313.951,0,0,null,0,"coordinator_restart",0,22,24,6,24,0,6,0.004199099959805608,0.0032603000290691853],
+    [11008,"nominal","nearest-task",54,true,6,314.998,0,0,null,0,"nominal",0,22,24,6,24,0,3,0.00012310006422922015,0.00004910002462565899],
+    [11008,"nominal","analytic-balanced",58,true,6,348.323,0,0,null,0,"nominal",0,21,24,6,24,0,3,0.000713299959897995,0.0005425999988801777],
+    [11008,"nominal","learned-balanced",55,true,6,319.508,0,0,null,0,"nominal",0,21,24,6,24,0,3,0.0007792999967932701,0.0006154000293463469],
+    [11008,"nominal","mission-workload",52,true,6,302.615,0,0,null,0,"nominal",0,18,24,6,24,0,4,0.0034602999803610146,0.0027312999591231346],
+    [11008,"unit_loss","nearest-task",57,true,6,307.902,0,1,7,0,"unit_loss",0,30,24,6,24,0,4,0.0001246999017894268,0.000044599990360438824],
+    [11008,"unit_loss","analytic-balanced",59,true,6,330.675,0,1,7,0,"unit_loss",0,29,24,6,24,0,4,0.0007845999789424241,0.0005739000043831766],
+    [11008,"unit_loss","learned-balanced",57,true,6,307.902,0,1,7,0,"unit_loss",0,30,24,6,24,0,4,0.0009381999843753874,0.0006979999598115683],
+    [11008,"unit_loss","mission-workload",57,true,6,317.479,0,1,8,0,"unit_loss",0,28,24,6,24,0,5,0.0035882999654859304,0.0026661999872885644],
+    [11008,"comms_loss","nearest-task",50,true,6,286.561,0,1,7,0,"comms_loss",1,22,24,6,24,0,4,0.00012529996456578374,0.00005589995998889208],
+    [11008,"comms_loss","analytic-balanced",58,true,6,351.133,0,1,6,0,"comms_loss",1,22,24,6,24,0,4,0.0008986999746412039,0.000691999972332269],
+    [11008,"comms_loss","learned-balanced",56,true,6,326.22,0,1,6,0,"comms_loss",1,21,24,6,24,0,4,0.0011181999580003321,0.000927999964915216],
+    [11008,"comms_loss","mission-workload",54,true,6,314.946,0,1,6,0,"comms_loss",1,22,24,6,24,0,5,0.0051924000144936144,0.004008499963674694],
+    [11008,"stale_sensor","nearest-task",54,true,6,319.508,0,0,null,5,"stale_sensor",0,21,24,6,24,0,3,0.0001194999786093831,0.00004429998807609081],
+    [11008,"stale_sensor","analytic-balanced",58,true,6,351.133,0,0,null,5,"stale_sensor",0,21,24,6,24,0,3,0.0011353999725542963,0.0009600999765098095],
+    [11008,"stale_sensor","learned-balanced",56,true,6,326.22,0,0,null,5,"stale_sensor",0,21,24,6,24,0,3,0.001062900060787797,0.0009522000327706337],
+    [11008,"stale_sensor","mission-workload",52,true,6,302.615,0,0,null,5,"stale_sensor",0,22,24,6,24,0,4,0.0032847999245859683,0.0027108999784104526],
+    [11008,"coordinator_restart","nearest-task",54,true,6,314.998,0,0,null,0,"coordinator_restart",0,22,24,6,24,0,3,0.00011770002311095595,0.000046600005589425564],
+    [11008,"coordinator_restart","analytic-balanced",58,true,6,348.323,0,0,null,0,"coordinator_restart",0,21,24,6,24,0,3,0.0007007000385783613,0.0005446999566629529],
+    [11008,"coordinator_restart","learned-balanced",55,true,6,319.508,0,0,null,0,"coordinator_restart",0,21,24,6,24,0,3,0.000756199995521456,0.0006127000087872148],
+    [11008,"coordinator_restart","mission-workload",52,true,6,302.615,0,0,null,0,"coordinator_restart",0,18,24,6,24,0,4,0.0034854000550694764,0.0027062000008299947],
+    [11009,"nominal","nearest-task",41,true,6,240.354,0,0,null,0,"nominal",0,18,24,6,24,0,4,0.00013609998859465122,0.0000657000346109271],
+    [11009,"nominal","analytic-balanced",41,true,6,240.354,0,0,null,0,"nominal",0,18,24,6,24,0,4,0.0011095000663772225,0.0009486000053584576],
+    [11009,"nominal","learned-balanced",41,true,6,240.354,0,0,null,0,"nominal",0,18,24,6,24,0,4,0.0011416000197641551,0.0009711000020615757],
+    [11009,"nominal","mission-workload",39,true,6,226.363,0,0,null,0,"nominal",0,16,24,6,24,0,4,0.0031855999841354787,0.0025038999738171697],
+    [11009,"unit_loss","nearest-task",54,true,6,245.548,0,1,16,0,"unit_loss",0,27,24,6,24,0,4,0.0001547999563626945,0.00008399999933317304],
+    [11009,"unit_loss","analytic-balanced",58,true,6,268.227,0,1,5,0,"unit_loss",0,33,24,6,24,0,5,0.0010770999360829592,0.0008618999854661524],
+    [11009,"unit_loss","learned-balanced",58,true,6,268.227,0,1,5,0,"unit_loss",0,33,24,6,24,0,5,0.0007975000189617276,0.0005663000047206879],
+    [11009,"unit_loss","mission-workload",55,true,6,247.788,0,1,7,0,"unit_loss",0,27,24,6,24,0,5,0.004282400070223957,0.0032627999898977578],
+    [11009,"comms_loss","nearest-task",44,true,6,222.383,0,1,10,0,"comms_loss",1,18,24,6,24,0,4,0.0001142999972216785,0.00003270001616328955],
+    [11009,"comms_loss","analytic-balanced",43,true,6,234.071,0,1,5,0,"comms_loss",1,18,24,6,24,0,4,0.0008396999910473824,0.0006107999943196774],
+    [11009,"comms_loss","learned-balanced",43,true,6,234.071,0,1,5,0,"comms_loss",1,18,24,6,24,0,4,0.00073640001937747,0.0005552999791689217],
+    [11009,"comms_loss","mission-workload",44,true,6,228.904,0,1,7,0,"comms_loss",1,18,24,6,24,0,5,0.004762600001413375,0.003576299990527332],
+    [11009,"stale_sensor","nearest-task",45,true,6,234.573,0,0,null,5,"stale_sensor",0,18,24,6,24,0,4,0.00010629999451339245,0.00004349998198449612],
+    [11009,"stale_sensor","analytic-balanced",45,true,6,234.573,0,0,null,5,"stale_sensor",0,18,24,6,24,0,4,0.0007088001002557576,0.0005510000046342611],
+    [11009,"stale_sensor","learned-balanced",45,true,6,234.573,0,0,null,5,"stale_sensor",0,18,24,6,24,0,4,0.0011459999368526042,0.0009678000351414084],
+    [11009,"stale_sensor","mission-workload",40,true,6,228.287,0,0,null,5,"stale_sensor",0,18,24,6,24,0,8,0.005429899843875319,0.004306499962694943],
+    [11009,"coordinator_restart","nearest-task",41,true,6,240.354,0,0,null,0,"coordinator_restart",0,18,24,6,24,0,4,0.00010019994806498289,0.00003319996176287532],
+    [11009,"coordinator_restart","analytic-balanced",41,true,6,240.354,0,0,null,0,"coordinator_restart",0,18,24,6,24,0,4,0.0007398999878205359,0.0005425999988801777],
+    [11009,"coordinator_restart","learned-balanced",41,true,6,240.354,0,0,null,0,"coordinator_restart",0,18,24,6,24,0,4,0.0007693000370636582,0.0005539000267162919],
+    [11009,"coordinator_restart","mission-workload",39,true,6,226.363,0,0,null,0,"coordinator_restart",0,16,24,6,24,0,4,0.003208200039807707,0.002524100011214614],
+    [11010,"nominal","nearest-task",58,true,8,394.475,0,0,null,0,"nominal",0,22,32,8,32,0,5,0.00013870000839233398,0.000037999998312443495],
+    [11010,"nominal","analytic-balanced",56,true,8,388.408,0,0,null,0,"nominal",0,19,32,8,32,0,4,0.0016913999570533633,0.0013980999938212335],
+    [11010,"nominal","learned-balanced",56,true,8,388.408,0,0,null,0,"nominal",0,19,32,8,32,0,4,0.002307599992491305,0.0019865999929606915],
+    [11010,"nominal","mission-workload",50,true,8,336.052,0,0,null,0,"nominal",0,17,32,8,32,0,4,0.026329200074542314,0.02453550003701821],
+    [11010,"unit_loss","nearest-task",56,true,8,350.557,0,1,5,0,"unit_loss",0,31,32,8,32,0,7,0.00024209998082369566,0.00005560001591220498],
+    [11010,"unit_loss","analytic-balanced",59,true,8,393.918,0,1,3,0,"unit_loss",0,30,32,8,32,0,6,0.002085299987811595,0.0017591000068932772],
+    [11010,"unit_loss","learned-balanced",59,true,8,393.918,0,1,3,0,"unit_loss",0,30,32,8,32,0,6,0.002683500002603978,0.002233400009572506],
+    [11010,"unit_loss","mission-workload",56,true,8,370.276,0,1,21,0,"unit_loss",0,27,32,8,32,0,7,0.025346600043121725,0.022637200017925352],
+    [11010,"comms_loss","nearest-task",54,true,8,351.383,0,1,5,0,"comms_loss",1,24,32,8,32,0,6,0.00019099988276138902,0.00004719995195046067],
+    [11010,"comms_loss","analytic-balanced",54,true,8,371.335,0,1,3,0,"comms_loss",1,25,32,8,32,0,7,0.0017751000123098493,0.0013850000104866922],
+    [11010,"comms_loss","learned-balanced",54,true,8,371.335,0,1,3,0,"comms_loss",1,25,32,8,32,0,7,0.0027361001120880246,0.002267500036396086],
+    [11010,"comms_loss","mission-workload",48,true,8,325.571,0,1,11,0,"comms_loss",1,21,32,8,32,0,7,0.021464600053150207,0.018489300040528178],
+    [11010,"stale_sensor","nearest-task",54,true,8,366.855,0,0,null,5,"stale_sensor",0,22,32,8,32,0,6,0.0002079999540001154,0.00007959996582940221],
+    [11010,"stale_sensor","analytic-balanced",54,true,8,366.855,0,0,null,5,"stale_sensor",0,22,32,8,32,0,6,0.002037599973846227,0.0016376000130549073],
+    [11010,"stale_sensor","learned-balanced",54,true,8,366.855,0,0,null,5,"stale_sensor",0,22,32,8,32,0,6,0.0019378000288270414,0.0016390999662689865],
+    [11010,"stale_sensor","mission-workload",50,true,8,336.052,0,0,null,5,"stale_sensor",0,22,32,8,32,0,6,0.025358199956826866,0.02270420000422746],
+    [11010,"coordinator_restart","nearest-task",58,true,8,394.475,0,0,null,0,"coordinator_restart",0,22,32,8,32,0,5,0.0002199001028202474,0.00012139999307692051],
+    [11010,"coordinator_restart","analytic-balanced",56,true,8,388.408,0,0,null,0,"coordinator_restart",0,19,32,8,32,0,4,0.001859599957242608,0.0015224000089801848],
+    [11010,"coordinator_restart","learned-balanced",56,true,8,388.408,0,0,null,0,"coordinator_restart",0,19,32,8,32,0,4,0.0028383000171743333,0.0025665999855846167],
+    [11010,"coordinator_restart","mission-workload",50,true,8,336.052,0,0,null,0,"coordinator_restart",0,17,32,8,32,0,4,0.028354700014460832,0.02674310002475977],
+    [11011,"nominal","nearest-task",48,true,6,317.029,0,0,null,0,"nominal",0,18,24,6,24,0,3,0.00011669995728880167,0.00004829996032640338],
+    [11011,"nominal","analytic-balanced",47,true,6,305.873,0,0,null,0,"nominal",0,16,24,6,24,0,3,0.0006783000426366925,0.0005508000031113625],
+    [11011,"nominal","learned-balanced",48,true,6,309.345,0,0,null,0,"nominal",0,17,24,6,24,0,3,0.0007207000744529068,0.0005842000246047974],
+    [11011,"nominal","mission-workload",45,true,6,285.523,0,0,null,0,"nominal",0,16,24,6,24,0,3,0.0038196000386960804,0.002876300015486777],
+    [11011,"unit_loss","nearest-task",46,true,6,302.154,0,1,4,0,"unit_loss",0,24,24,6,24,0,5,0.000154700072016567,0.00004409998655319214],
+    [11011,"unit_loss","analytic-balanced",48,true,6,311.313,0,1,5,0,"unit_loss",0,25,24,6,24,0,4,0.0008267000084742904,0.0005889000021852553],
+    [11011,"unit_loss","learned-balanced",48,true,6,311.313,0,1,5,0,"unit_loss",0,25,24,6,24,0,4,0.001108999946154654,0.0006145000224933028],
+    [11011,"unit_loss","mission-workload",48,true,6,302.228,0,1,11,0,"unit_loss",0,23,24,6,24,0,4,0.004712300084065646,0.00395740004023537],
+    [11011,"comms_loss","nearest-task",51,true,6,335.177,0,1,4,0,"comms_loss",1,21,24,6,24,0,5,0.00015350000467151403,0.000052499992307275534],
+    [11011,"comms_loss","analytic-balanced",50,true,6,324.021,0,1,5,0,"comms_loss",1,22,24,6,24,0,4,0.0011226000497117639,0.0008908000309020281],
+    [11011,"comms_loss","learned-balanced",50,true,6,324.021,0,1,5,0,"comms_loss",1,22,24,6,24,0,4,0.0008737999596633017,0.000647100037895143],
+    [11011,"comms_loss","mission-workload",49,true,6,311.894,0,1,6,0,"comms_loss",1,22,24,6,24,0,4,0.003611199965234846,0.0028367999475449324],
+    [11011,"stale_sensor","nearest-task",48,true,6,317.029,0,0,null,5,"stale_sensor",0,20,24,6,24,0,4,0.00011069991160184145,0.00003349996404722333],
+    [11011,"stale_sensor","analytic-balanced",47,true,6,305.873,0,0,null,5,"stale_sensor",0,20,24,6,24,0,3,0.0006867999327369034,0.0005450999597087502],
+    [11011,"stale_sensor","learned-balanced",47,true,6,305.873,0,0,null,5,"stale_sensor",0,20,24,6,24,0,3,0.0008075999794527888,0.0006247999845072627],
+    [11011,"stale_sensor","mission-workload",45,true,6,285.523,0,0,null,5,"stale_sensor",0,21,24,6,24,0,5,0.003992500016465783,0.0031577000045217574],
+    [11011,"coordinator_restart","nearest-task",48,true,6,317.029,0,0,null,0,"coordinator_restart",0,18,24,6,24,0,3,0.00008130003698170185,0.000039300008211284876],
+    [11011,"coordinator_restart","analytic-balanced",47,true,6,305.873,0,0,null,0,"coordinator_restart",0,16,24,6,24,0,3,0.0008089000475592911,0.0005748000112362206],
+    [11011,"coordinator_restart","learned-balanced",48,true,6,309.345,0,0,null,0,"coordinator_restart",0,17,24,6,24,0,3,0.0009142999188043177,0.0007544999825768173],
+    [11011,"coordinator_restart","mission-workload",45,true,6,285.523,0,0,null,0,"coordinator_restart",0,16,24,6,24,0,3,0.004337900027167052,0.0037986000534147024],
+    [11012,"nominal","nearest-task",39,true,4,332.418,0,0,null,0,"nominal",0,20,16,4,16,0,2,0.00004240003181621432,0.00002640002639964223],
+    [11012,"nominal","analytic-balanced",37,true,4,312.865,0,0,null,0,"nominal",0,18,16,4,16,0,2,0.00033169996459037066,0.0002838000073097646],
+    [11012,"nominal","learned-balanced",38,true,4,322.73,0,0,null,0,"nominal",0,19,16,4,16,0,2,0.0003220000653527677,0.00026380002964287996],
+    [11012,"nominal","mission-workload",36,true,4,301.037,0,0,null,0,"nominal",0,17,16,4,16,0,2,0.0007515999604947865,0.0006394999800249934],
+    [11012,"unit_loss","nearest-task",36,true,4,323.099,0,1,6,0,"unit_loss",0,19,16,4,16,0,3,0.0000795000814832747,0.000028200040105730295],
+    [11012,"unit_loss","analytic-balanced",37,true,4,322.095,0,1,6,0,"unit_loss",0,20,16,4,16,0,3,0.0002402999671176076,0.00015709997387602925],
+    [11012,"unit_loss","learned-balanced",37,true,4,313.411,0,1,6,0,"unit_loss",0,20,16,4,16,0,3,0.0003169000265188515,0.0002012000186368823],
+    [11012,"unit_loss","mission-workload",35,true,4,304.593,0,1,7,0,"unit_loss",0,17,16,4,16,0,2,0.000779900059569627,0.0006748000159859657],
+    [11012,"comms_loss","nearest-task",39,true,4,332.418,0,1,6,0,"comms_loss",1,20,16,4,16,0,2,0.00007449998520314693,0.00003809999907389283],
+    [11012,"comms_loss","analytic-balanced",37,true,4,312.865,0,1,6,0,"comms_loss",1,18,16,4,16,0,2,0.00030720001086592674,0.00022190000163391232],
+    [11012,"comms_loss","learned-balanced",38,true,4,322.73,0,1,6,0,"comms_loss",1,19,16,4,16,0,2,0.00021739996736869216,0.00016419996973127127],
+    [11012,"comms_loss","mission-workload",36,true,4,301.037,0,1,6,0,"comms_loss",1,17,16,4,16,0,3,0.000825099996291101,0.0005419999943114817],
+    [11012,"stale_sensor","nearest-task",39,true,4,332.418,0,0,null,5,"stale_sensor",0,20,16,4,16,0,2,0.000041499966755509377,0.000026099965907633305],
+    [11012,"stale_sensor","analytic-balanced",37,true,4,312.865,0,0,null,5,"stale_sensor",0,18,16,4,16,0,2,0.0002120999852195382,0.00016939995111897588],
+    [11012,"stale_sensor","learned-balanced",38,true,4,322.73,0,0,null,5,"stale_sensor",0,19,16,4,16,0,2,0.00024199998006224632,0.00018719997024163604],
+    [11012,"stale_sensor","mission-workload",36,true,4,301.037,0,0,null,5,"stale_sensor",0,17,16,4,16,0,2,0.0007178000523708761,0.000571400043554604],
+    [11012,"coordinator_restart","nearest-task",39,true,4,332.418,0,0,null,0,"coordinator_restart",0,20,16,4,16,0,2,0.000041400082409381866,0.00002670002868399024],
+    [11012,"coordinator_restart","analytic-balanced",37,true,4,312.865,0,0,null,0,"coordinator_restart",0,18,16,4,16,0,2,0.00028169999131932855,0.0002476999652571976],
+    [11012,"coordinator_restart","learned-balanced",38,true,4,322.73,0,0,null,0,"coordinator_restart",0,19,16,4,16,0,2,0.00019829999655485153,0.0001669999910518527],
+    [11012,"coordinator_restart","mission-workload",36,true,4,301.037,0,0,null,0,"coordinator_restart",0,17,16,4,16,0,2,0.0006910999654792249,0.0005769999697804451],
+    [11013,"nominal","nearest-task",91,true,12,588.598,0,0,null,0,"nominal",0,31,48,12,48,0,7,0.00027009996119886637,0.00008049997268244624],
+    [11013,"nominal","analytic-balanced",95,true,12,625.455,0,0,null,0,"nominal",0,34,48,12,48,0,9,0.006366099987644702,0.00519890000578016],
+    [11013,"nominal","learned-balanced",91,true,12,588.598,0,0,null,0,"nominal",0,31,48,12,48,0,7,0.00996100006159395,0.008595700026489794],
+    [11013,"nominal","mission-workload",84,true,12,541.413,0,0,null,0,"nominal",0,29,48,12,48,0,10,1.763662299956195,1.659610699978657],
+    [11013,"unit_loss","nearest-task",94,true,12,611.283,0,1,5,0,"unit_loss",0,48,48,12,48,0,10,0.00035779993049800396,0.00007170002209022641],
+    [11013,"unit_loss","analytic-balanced",94,true,12,621.729,0,1,4,0,"unit_loss",0,48,48,12,48,0,10,0.007793500029947609,0.006401000020559877],
+    [11013,"unit_loss","learned-balanced",95,true,12,621.252,0,1,4,0,"unit_loss",0,50,48,12,48,0,11,0.006245399999897927,0.005329100007656962],
+    [11013,"unit_loss","mission-workload",87,true,12,565.849,0,1,17,0,"unit_loss",0,43,48,12,48,0,11,1.6964736999943852,1.6406607000390068],
+    [11013,"comms_loss","nearest-task",97,true,12,629.446,0,1,5,0,"comms_loss",1,38,48,12,48,0,9,0.00035149999894201756,0.00006670004222542048],
+    [11013,"comms_loss","analytic-balanced",98,true,12,644.38,0,1,4,0,"comms_loss",1,38,48,12,48,0,9,0.007634099980350584,0.006494899978861213],
+    [11013,"comms_loss","learned-balanced",98,true,12,636.884,0,1,4,0,"comms_loss",1,36,48,12,48,0,10,0.0071221000398509204,0.006267499993555248],
+    [11013,"comms_loss","mission-workload",85,true,12,550.173,0,1,6,0,"comms_loss",1,34,48,12,48,0,10,1.917555799940601,1.7991737999836914],
+    [11013,"stale_sensor","nearest-task",97,true,12,624.919,0,0,null,5,"stale_sensor",0,38,48,12,48,0,10,0.00044620013795793056,0.00008080003317445517],
+    [11013,"stale_sensor","analytic-balanced",97,true,12,640.979,0,0,null,5,"stale_sensor",0,38,48,12,48,0,8,0.008136199961882085,0.006764599995221943],
+    [11013,"stale_sensor","learned-balanced",97,true,12,624.919,0,0,null,5,"stale_sensor",0,38,48,12,48,0,10,0.008889599877875298,0.00796369998715818],
+    [11013,"stale_sensor","mission-workload",84,true,12,541.413,0,0,null,5,"stale_sensor",0,34,48,12,48,0,11,1.7928105000173673,1.6890794999781065],
+    [11013,"coordinator_restart","nearest-task",91,true,12,588.598,0,0,null,0,"coordinator_restart",0,31,48,12,48,0,7,0.000250800047069788,0.000058299978263676167],
+    [11013,"coordinator_restart","analytic-balanced",95,true,12,625.455,0,0,null,0,"coordinator_restart",0,34,48,12,48,0,9,0.006367800000589341,0.005481200001668185],
+    [11013,"coordinator_restart","learned-balanced",91,true,12,588.598,0,0,null,0,"coordinator_restart",0,31,48,12,48,0,7,0.006506699894089252,0.005492399970535189],
+    [11013,"coordinator_restart","mission-workload",84,true,12,541.413,0,0,null,0,"coordinator_restart",0,29,48,12,48,0,10,1.8096025001141243,1.6987978999968618],
+    [11014,"nominal","nearest-task",59,true,8,315.328,0,0,null,0,"nominal",0,24,32,8,32,0,6,0.00019019999308511615,0.00004320003790780902],
+    [11014,"nominal","analytic-balanced",57,true,8,307.189,0,0,null,0,"nominal",0,23,32,8,32,0,6,0.0018127000075764954,0.0014394000172615051],
+    [11014,"nominal","learned-balanced",57,true,8,307.189,0,0,null,0,"nominal",0,23,32,8,32,0,6,0.00199999992037192,0.0015754999476484954],
+    [11014,"nominal","mission-workload",51,true,8,284.779,0,0,null,0,"nominal",0,18,32,8,32,0,5,0.02306079992558807,0.021212999999988824],
+    [11014,"unit_loss","nearest-task",57,true,8,307.154,0,1,20,0,"unit_loss",0,30,32,8,32,0,7,0.00024669995764270425,0.000043700041715055704],
+    [11014,"unit_loss","analytic-balanced",56,true,8,307.414,0,1,6,0,"unit_loss",0,29,32,8,32,0,7,0.0019258999382145703,0.0014924000133760273],
+    [11014,"unit_loss","learned-balanced",56,true,8,307.414,0,1,6,0,"unit_loss",0,29,32,8,32,0,7,0.002679999975953251,0.0022516000317409635],
+    [11014,"unit_loss","mission-workload",57,true,8,320.569,0,1,20,0,"unit_loss",0,28,32,8,32,0,7,0.02613150008255616,0.023287200019694865],
+    [11014,"comms_loss","nearest-task",57,true,8,315.573,0,1,6,0,"comms_loss",1,24,32,8,32,0,7,0.00022909999825060368,0.00005240004975348711],
+    [11014,"comms_loss","analytic-balanced",53,true,8,304.553,0,1,6,0,"comms_loss",1,20,32,8,32,0,5,0.0022190999006852508,0.0017553999787196517],
+    [11014,"comms_loss","learned-balanced",53,true,8,304.553,0,1,6,0,"comms_loss",1,20,32,8,32,0,5,0.0021853999933227897,0.001782100007403642],
+    [11014,"comms_loss","mission-workload",50,true,8,284.779,0,1,6,0,"comms_loss",1,20,32,8,32,0,6,0.022304799931589514,0.018664399976842105],
+    [11014,"stale_sensor","nearest-task",57,true,8,315.573,0,0,null,5,"stale_sensor",0,24,32,8,32,0,6,0.0001954999752342701,0.00004700000863522291],
+    [11014,"stale_sensor","analytic-balanced",55,true,8,311.538,0,0,null,5,"stale_sensor",0,21,32,8,32,0,6,0.0018381999689154327,0.0015291000017896295],
+    [11014,"stale_sensor","learned-balanced",55,true,8,311.538,0,0,null,5,"stale_sensor",0,21,32,8,32,0,6,0.002358199970331043,0.001999200030695647],
+    [11014,"stale_sensor","mission-workload",50,true,8,284.779,0,0,null,5,"stale_sensor",0,20,32,8,32,0,5,0.022755499987397343,0.01988739997614175],
+    [11014,"coordinator_restart","nearest-task",59,true,8,315.328,0,0,null,0,"coordinator_restart",0,24,32,8,32,0,6,0.00017989991465583444,0.000039599952287971973],
+    [11014,"coordinator_restart","analytic-balanced",57,true,8,307.189,0,0,null,0,"coordinator_restart",0,23,32,8,32,0,6,0.0018969000084325671,0.001570700027514249],
+    [11014,"coordinator_restart","learned-balanced",57,true,8,307.189,0,0,null,0,"coordinator_restart",0,23,32,8,32,0,6,0.0018682999652810395,0.001541699981316924],
+    [11014,"coordinator_restart","mission-workload",51,true,8,284.779,0,0,null,0,"coordinator_restart",0,18,32,8,32,0,5,0.022530000016558915,0.02053039998281747],
+    [11015,"nominal","nearest-task",80,true,12,536.792,0,0,null,0,"nominal",0,33,48,12,48,0,8,0.000292200013063848,0.000062700011767447],
+    [11015,"nominal","analytic-balanced",79,true,12,541.461,0,0,null,0,"nominal",0,31,48,12,48,0,7,0.007981799950357527,0.0069429000141099095],
+    [11015,"nominal","learned-balanced",80,true,12,536.792,0,0,null,0,"nominal",0,33,48,12,48,0,8,0.0073919000569731,0.006094600015785545],
+    [11015,"nominal","mission-workload",63,true,12,449.2,0,0,null,0,"nominal",0,23,48,12,48,0,8,1.7744903999846429,1.6955443000188097],
+    [11015,"unit_loss","nearest-task",65,true,12,529.263,0,1,7,0,"unit_loss",0,32,48,12,48,0,10,0.00036660011392086744,0.00006790005136281252],
+    [11015,"unit_loss","analytic-balanced",68,true,12,558.914,0,1,10,0,"unit_loss",0,35,48,12,48,0,9,0.010940899839624763,0.009610300010535866],
+    [11015,"unit_loss","learned-balanced",65,true,12,529.263,0,1,7,0,"unit_loss",0,32,48,12,48,0,10,0.007772599929012358,0.006586099974811077],
+    [11015,"unit_loss","mission-workload",57,true,12,460.086,0,1,21,0,"unit_loss",0,28,48,12,48,0,7,1.7039739000611007,1.680509899975732],
+    [11015,"comms_loss","nearest-task",72,true,12,521.827,0,1,6,0,"comms_loss",1,27,48,12,48,0,8,0.00030519999563694,0.00006859999848529696],
+    [11015,"comms_loss","analytic-balanced",77,true,12,546.872,0,1,6,0,"comms_loss",1,30,48,12,48,0,7,0.008179500000551343,0.006052100041415542],
+    [11015,"comms_loss","learned-balanced",72,true,12,521.827,0,1,6,0,"comms_loss",1,27,48,12,48,0,8,0.007064600009471178,0.005453400022815913],
+    [11015,"comms_loss","mission-workload",64,true,12,452.758,0,1,6,0,"comms_loss",1,24,48,12,48,0,8,1.817515799892135,1.774804699991364],
+    [11015,"stale_sensor","nearest-task",72,true,12,521.827,0,0,null,5,"stale_sensor",0,26,48,12,48,0,9,0.00037910003447905183,0.00007650000043213367],
+    [11015,"stale_sensor","analytic-balanced",77,true,12,546.872,0,0,null,5,"stale_sensor",0,29,48,12,48,0,7,0.006764599995221943,0.005473299999721348],
+    [11015,"stale_sensor","learned-balanced",72,true,12,521.827,0,0,null,5,"stale_sensor",0,26,48,12,48,0,9,0.008938200131524354,0.007990500016603619],
+    [11015,"stale_sensor","mission-workload",63,true,12,449.2,0,0,null,5,"stale_sensor",0,23,48,12,48,0,9,1.8440534999826923,1.7682071999879554],
+    [11015,"coordinator_restart","nearest-task",80,true,12,536.792,0,0,null,0,"coordinator_restart",0,33,48,12,48,0,8,0.0003401999711059034,0.00008949998300522566],
+    [11015,"coordinator_restart","analytic-balanced",79,true,12,541.461,0,0,null,0,"coordinator_restart",0,31,48,12,48,0,7,0.00789839995559305,0.0068388000363484025],
+    [11015,"coordinator_restart","learned-balanced",80,true,12,536.792,0,0,null,0,"coordinator_restart",0,33,48,12,48,0,8,0.007625099970027804,0.006068199989385903],
+    [11015,"coordinator_restart","mission-workload",63,true,12,449.2,0,0,null,0,"coordinator_restart",0,23,48,12,48,0,8,1.7304436999256723,1.6272622999968007]
+  ]
+}

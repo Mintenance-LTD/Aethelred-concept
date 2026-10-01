@@ -20,6 +20,9 @@ class ModelManifest:
     observation_schema: str
     evaluation_report_sha256: str
     runtime_target: str
+    training_data_reference: str = "unrecorded"
+    runtime_environment: str = "unrecorded"
+    build_provenance: str = "unrecorded"
 
     def to_json(self) -> str:
         """Return a canonical serialisation suitable for review and signing."""
@@ -32,6 +35,17 @@ class ModelManifest:
         target.write_text(self.to_json(), encoding="utf-8")
         return target
 
+    def require_complete_provenance(self) -> None:
+        """Reject legacy or placeholder metadata before a production release is used."""
+        if self.schema_version != "1.1":
+            raise ValueError("Release manifest must use provenance schema 1.1")
+        for value, name in (
+            (self.training_data_reference, "training data reference"),
+            (self.runtime_environment, "runtime environment"),
+            (self.build_provenance, "build provenance"),
+        ):
+            _require_provenance(value, name)
+
     def verify_artifact(
         self,
         model_path: str | Path,
@@ -40,9 +54,13 @@ class ModelManifest:
         configuration: dict[str, object],
         observation_schema: str,
         runtime_target: str,
+        training_data_reference: str,
+        runtime_environment: str,
+        build_provenance: str,
     ) -> Path:
         """Fail closed unless a runtime artefact matches this exact manifest."""
         model = Path(model_path)
+        self.require_complete_provenance()
         if not model.is_file() or model.name != self.model_name:
             raise ValueError("Model artefact path does not match the manifest")
         if _sha256_file(model) != self.model_sha256:
@@ -58,6 +76,12 @@ class ModelManifest:
             raise ValueError("Runtime observation schema does not match the manifest")
         if runtime_target != self.runtime_target:
             raise ValueError("Runtime target does not match the manifest")
+        if training_data_reference != self.training_data_reference:
+            raise ValueError("Training-data reference does not match the manifest")
+        if runtime_environment != self.runtime_environment:
+            raise ValueError("Runtime environment does not match the manifest")
+        if build_provenance != self.build_provenance:
+            raise ValueError("Build provenance does not match the manifest")
         return model
 
     @classmethod
@@ -69,6 +93,9 @@ class ModelManifest:
         configuration: dict[str, object],
         observation_schema: str,
         runtime_target: str,
+        training_data_reference: str,
+        runtime_environment: str,
+        build_provenance: str,
     ) -> ModelManifest:
         """Build a manifest from immutable inputs and their SHA-256 digests."""
         model = Path(model_path)
@@ -79,7 +106,7 @@ class ModelManifest:
             configuration, sort_keys=True, separators=(",", ":")
         ).encode("utf-8")
         return cls(
-            schema_version="1.0",
+            schema_version="1.1",
             model_name=model.name,
             model_sha256=_sha256_file(model),
             code_revision=code_revision,
@@ -87,6 +114,9 @@ class ModelManifest:
             observation_schema=observation_schema,
             evaluation_report_sha256=_sha256_file(report),
             runtime_target=runtime_target,
+            training_data_reference=_require_provenance(training_data_reference, "training data reference"),
+            runtime_environment=_require_provenance(runtime_environment, "runtime environment"),
+            build_provenance=_require_provenance(build_provenance, "build provenance"),
         )
 
 
@@ -96,3 +126,9 @@ def _sha256_file(path: Path) -> str:
         for block in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(block)
     return digest.hexdigest()
+
+
+def _require_provenance(value: str, name: str) -> str:
+    if not value.strip() or value == "unrecorded":
+        raise ValueError(f"Manifest {name} is required")
+    return value

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from uuid import uuid4
 
 import pytest
@@ -12,30 +13,66 @@ from aethelred.runtime.audit import JsonlAuditJournal
 from aethelred.runtime.operational import (
     AuthorisationOutcome,
     CommandArbiter,
+    CommandExecutionError,
     CommandReceipt,
     IntentProposal,
     Mission,
     MissionCapability,
+    ObservationProvenance,
     OperatingArea,
     OperationalControlLoop,
     OperationalSafetySupervisor,
     WorldState,
 )
-from aethelred.runtime.simulator_adapter import SimulatorCommandAdapter
+from aethelred.simulation.operational_adapter import SimulatorCommandAdapter
 
 
 class _RecordingAdapter:
     def __init__(self) -> None:
         self.command_id = None
+        self.sequence = None
 
     def execute(self, command):
         self.command_id = command.command_id
-        return CommandReceipt(command_id=command.command_id, accepted=True, recorded_at=datetime.now(UTC))
+        self.sequence = command.sequence
+        return CommandReceipt(
+            command_id=command.command_id,
+            accepted=True,
+            recorded_at=datetime.now(UTC),
+            sequence=command.sequence,
+        )
 
 
 class _MismatchedReceiptAdapter:
     def execute(self, command):
-        return CommandReceipt(command_id=uuid4(), accepted=True, recorded_at=datetime.now(UTC))
+        return CommandReceipt(
+            command_id=uuid4(), accepted=True, recorded_at=datetime.now(UTC), sequence=command.sequence
+        )
+
+
+class _NackAdapter:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def execute(self, command):
+        self.calls += 1
+        return CommandReceipt(
+            command_id=command.command_id,
+            accepted=False,
+            recorded_at=datetime.now(UTC),
+            sequence=command.sequence,
+            detail="vehicle controller rejected command",
+        )
+
+
+class _WrongSequenceAdapter:
+    def execute(self, command):
+        return CommandReceipt(
+            command_id=command.command_id,
+            accepted=True,
+            recorded_at=datetime.now(UTC),
+            sequence=command.sequence + 1,
+        )
 
 
 class _RecordingSimulation:
@@ -49,7 +86,10 @@ class _RecordingSimulation:
 
         return BattlefieldState(
             timestep=self._state.revision,
-            friendly_units=[DroneState(role=DroneRole.RECON, position=self._state.position)],
+            friendly_units=[DroneState(
+                role=DroneRole.RECON,
+                position=Vec2(x=self._state.position.x, y=self._state.position.y),
+            )],
         )
 
     def step_decision(self, decision):
@@ -82,6 +122,14 @@ def _runtime_inputs() -> tuple[Mission, WorldState, IntentProposal, datetime]:
         communications_healthy=True,
         operator_link_active=True,
         runtime_healthy=True,
+        observation=ObservationProvenance(
+            observation_id=uuid4(),
+            source_id="simulated-estimator",
+            coordinate_frame="local-enu",
+            schema_version="aethelred-observation/v1",
+            sequence=42,
+            uncertainty=0.05,
+        ),
     )
     proposal = IntentProposal(
         proposal_id=uuid4(),
@@ -126,6 +174,57 @@ def test_stale_or_disallowed_proposals_cannot_execute():
         CommandArbiter().execute(_RecordingAdapter(), result)
 
 
+def test_nacked_command_is_audited_and_cannot_be_reissued(tmp_path):
+    mission, state, proposal, now = _runtime_inputs()
+    result = OperationalSafetySupervisor().authorise(proposal, state, mission, now)
+    journal = JsonlAuditJournal(tmp_path / "audit.jsonl")
+    arbiter = CommandArbiter(journal)
+    adapter = _NackAdapter()
+
+    with pytest.raises(CommandExecutionError, match="negatively acknowledged"):
+        arbiter.execute(adapter, result, now)
+    with pytest.raises(PermissionError, match="already been consumed"):
+        arbiter.execute(adapter, result, now)
+
+    assert adapter.calls == 1
+    assert [event["event_type"] for event in journal.read_all()] == [
+        "command_execution_started",
+        "command_nacked",
+        "command_rejected",
+    ]
+
+
+def test_command_sequences_increase_per_vehicle_and_recover_from_journal(tmp_path):
+    mission, state, proposal, now = _runtime_inputs()
+    supervisor = OperationalSafetySupervisor()
+    journal = JsonlAuditJournal(tmp_path / "audit.jsonl")
+    adapter = _RecordingAdapter()
+    arbiter = CommandArbiter(journal)
+
+    arbiter.execute(adapter, supervisor.authorise(proposal, state, mission, now), now)
+    first_sequence = adapter.sequence
+    arbiter.execute(adapter, supervisor.authorise(proposal, state, mission, now), now)
+    second_sequence = adapter.sequence
+    CommandArbiter(journal).execute(adapter, supervisor.authorise(proposal, state, mission, now), now)
+
+    assert (first_sequence, second_sequence, adapter.sequence) == (1, 2, 3)
+    starts = [
+        event for event in journal.read_all() if event["event_type"] == "command_execution_started"
+    ]
+    assert [event["payload"]["sequence"] for event in starts] == [1, 2, 3]
+
+
+def test_command_receipt_with_wrong_sequence_fails_closed(tmp_path):
+    mission, state, proposal, now = _runtime_inputs()
+    result = OperationalSafetySupervisor().authorise(proposal, state, mission, now)
+    journal = JsonlAuditJournal(tmp_path / "audit.jsonl")
+
+    with pytest.raises(CommandExecutionError, match="sequence"):
+        CommandArbiter(journal).execute(_WrongSequenceAdapter(), result, now)
+
+    assert journal.read_all()[-1]["event_type"] == "command_rejected"
+
+
 def test_future_state_cannot_be_authorised():
     mission, state, proposal, now = _runtime_inputs()
     future_state = WorldState(**{**state.__dict__, "observed_at": now + timedelta(seconds=1)})
@@ -155,6 +254,15 @@ def test_operating_area_rejects_invalid_bounds_and_non_finite_positions():
     assert not area.contains(Vec2(x=float("nan"), y=0.0))
 
 
+def test_observation_provenance_requires_identifiable_finite_metadata():
+    with pytest.raises(ValueError, match="source"):
+        ObservationProvenance(uuid4(), "", "local-enu", "v1", 0, 0.1)
+    with pytest.raises(ValueError, match="sequence"):
+        ObservationProvenance(uuid4(), "estimator", "local-enu", "v1", -1, 0.1)
+    with pytest.raises(ValueError, match="uncertainty"):
+        ObservationProvenance(uuid4(), "estimator", "local-enu", "v1", 0, float("nan"))
+
+
 @pytest.mark.parametrize(
     ("changes", "expected_rule"),
     [
@@ -165,6 +273,7 @@ def test_operating_area_rejects_invalid_bounds_and_non_finite_positions():
         ({"operator_link_active": False}, "operator_link"),
         ({"runtime_healthy": False}, "runtime_health"),
         ({"battery_reserve": float("nan")}, "telemetry_values"),
+        ({"observation": ObservationProvenance(uuid4(), "estimator", "local-enu", "v1", 8, 0.3)}, "observation_uncertainty"),
     ],
 )
 def test_runtime_health_constraints_fail_closed(changes, expected_rule):
@@ -267,3 +376,13 @@ def test_simulator_adapter_never_emits_engage_actions():
 
     assert simulation.decision is not None
     assert all(action.action_type is not TacticalActionType.ENGAGE for action in simulation.decision.actions)
+
+
+def test_operational_runtime_contains_no_tactical_simulator_dependencies():
+    """Production runtime contracts must not import tactical simulator types."""
+    runtime_root = Path(__file__).parents[1] / "src" / "aethelred" / "runtime"
+    runtime_source = "\n".join(path.read_text(encoding="utf-8") for path in runtime_root.glob("*.py"))
+
+    assert "aethelred.core.actions" not in runtime_source
+    assert "aethelred.core.enums" not in runtime_source
+    assert "TacticalActionType" not in runtime_source

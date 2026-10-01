@@ -8,6 +8,7 @@ from hashlib import sha256
 from typing import Any
 from uuid import UUID
 
+from aethelred.deployment.attestation import ReleaseAttestation
 from aethelred.deployment.model_manifest import ModelManifest
 from aethelred.deployment.promotion import (
     ApprovedModelRelease,
@@ -67,7 +68,6 @@ class ReleaseLedger:
         if release_id in self._registrations:
             raise PromotionError("Release is already registered")
         registration = ReleaseRegistration(release_id, approved_release)
-        self._registrations[release_id] = registration
         self.journal.record(
             "release_registered",
             release_id,
@@ -76,9 +76,11 @@ class ReleaseLedger:
                     "manifest": asdict(approved_release.manifest),
                     "evaluation": asdict(approved_release.evaluation),
                     "approval": asdict(approved_release.approval),
+                    "attestation": asdict(approved_release.attestation),
                 },
             },
         )
+        self._registrations[release_id] = registration
         return registration
 
     def activate(self, release_id: str, operator: str, rationale: str) -> ReleaseRegistration:
@@ -86,7 +88,6 @@ class ReleaseLedger:
         registration = self._get_registered(release_id)
         self._validate_actor(operator, rationale)
         previous_release_id = self._active_release_id
-        self._active_release_id = release_id
         self.journal.record(
             "release_activated",
             release_id,
@@ -96,6 +97,7 @@ class ReleaseLedger:
                 "rationale": rationale,
             },
         )
+        self._active_release_id = release_id
         return registration
 
     def rollback(self, target_release_id: str, operator: str, rationale: str) -> RollbackRecord:
@@ -113,7 +115,6 @@ class ReleaseLedger:
             rationale=rationale,
             occurred_at=datetime.now(UTC),
         )
-        self._active_release_id = target_release_id
         self.journal.record(
             "release_rolled_back",
             target_release_id,
@@ -123,6 +124,7 @@ class ReleaseLedger:
                 "rationale": rationale,
             },
         )
+        self._active_release_id = target_release_id
         return record
 
     def recover(self) -> str | None:
@@ -183,7 +185,8 @@ class ReleaseLedger:
             manifest_raw = raw["manifest"]
             evaluation_raw = raw["evaluation"]
             approval_raw = raw["approval"]
-            if not all(isinstance(value, dict) for value in (manifest_raw, evaluation_raw, approval_raw)):
+            attestation_raw = raw["attestation"]
+            if not all(isinstance(value, dict) for value in (manifest_raw, evaluation_raw, approval_raw, attestation_raw)):
                 raise TypeError("release payload sections must be mappings")
             manifest = ModelManifest(**manifest_raw)
             evaluation = HeldOutEvaluation(
@@ -193,12 +196,21 @@ class ReleaseLedger:
                 baseline_metrics=dict(evaluation_raw["baseline_metrics"]),
                 safety_checks=dict(evaluation_raw["safety_checks"]),
                 report_sha256=str(evaluation_raw["report_sha256"]),
+                scenario_categories=tuple(evaluation_raw.get("scenario_categories", ())),
             )
             approval = HumanApproval(
                 approver=str(approval_raw["approver"]),
                 rationale=str(approval_raw["rationale"]),
                 approved_at=datetime.fromisoformat(str(approval_raw["approved_at"])),
             )
+            attestation = ReleaseAttestation(
+                issuer_id=str(attestation_raw["issuer_id"]),
+                manifest_sha256=str(attestation_raw["manifest_sha256"]),
+                evaluation_report_sha256=str(attestation_raw["evaluation_report_sha256"]),
+                approver=str(attestation_raw["approver"]),
+                approved_at=datetime.fromisoformat(str(attestation_raw["approved_at"])),
+                signature=str(attestation_raw["signature"]),
+            )
         except (KeyError, TypeError, ValueError) as error:
             raise PromotionError("Invalid approved-release payload in audit log") from error
-        return ApprovedModelRelease(manifest=manifest, evaluation=evaluation, approval=approval)
+        return ApprovedModelRelease(manifest=manifest, evaluation=evaluation, approval=approval, attestation=attestation)

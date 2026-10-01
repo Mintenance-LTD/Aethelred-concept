@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import json
 import os
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from hashlib import sha256
 from pathlib import Path
-from typing import Any
+from threading import Lock, RLock
+from typing import Any, ClassVar
 from uuid import UUID, uuid4
 
 
@@ -32,8 +34,14 @@ class AuditIntegrityError(ValueError):
 class JsonlAuditJournal:
     """A small, durable, append-only JSON Lines journal for local deployments."""
 
+    _path_locks_guard: ClassVar[Any] = Lock()
+    _path_locks: ClassVar[dict[Path, Any]] = {}
+
     def __init__(self, path: str | Path) -> None:
         self.path = Path(path)
+        lock_path = self.path.resolve()
+        with self._path_locks_guard:
+            self._lock = self._path_locks.setdefault(lock_path, RLock())
 
     def record(
         self,
@@ -42,6 +50,79 @@ class JsonlAuditJournal:
         payload: dict[str, Any],
     ) -> AuditEvent:
         """Persist one event and fsync it before acknowledging the write."""
+        with self._append_lock():
+            return self._record_locked(event_type, correlation_id, payload)
+
+    def record_once(
+        self,
+        event_type: str,
+        correlation_id: str,
+        payload: dict[str, Any],
+    ) -> AuditEvent | None:
+        """Persist an event only if its type/correlation pair has not occurred.
+
+        The existence check and append share the same inter-process lock. This
+        makes the method suitable for durable idempotency keys such as signed
+        intent nonces.
+        """
+        with self._append_lock():
+            if any(
+                event.get("event_type") == event_type
+                and event.get("correlation_id") == correlation_id
+                for event in self.read_all()
+            ):
+                return None
+            return self._record_locked(event_type, correlation_id, payload)
+
+    def record_command_execution_started(
+        self,
+        correlation_id: str,
+        payload: dict[str, Any],
+    ) -> AuditEvent:
+        """Atomically allocate and persist a per-vehicle command sequence.
+
+        A sequence is meaningful only when its allocation and durable command
+        consumption record cannot be separated.  Sharing the journal lock
+        prevents two local runtime processes from allocating the same sequence
+        for one vehicle.
+        """
+        vehicle_id = payload.get("vehicle_id")
+        if not isinstance(vehicle_id, str) or not vehicle_id:
+            raise ValueError("Command-start payload requires a vehicle ID")
+        with self._append_lock():
+            events = self.read_all()
+            if any(
+                event.get("event_type") == "command_execution_started"
+                and event.get("correlation_id") == correlation_id
+                for event in events
+            ):
+                raise AuditIntegrityError("Command execution has already been started")
+            last_sequence = 0
+            for event in events:
+                if event.get("event_type") != "command_execution_started":
+                    continue
+                recorded_payload = event.get("payload")
+                if not isinstance(recorded_payload, dict):
+                    raise AuditIntegrityError("Command-start record has an invalid payload")
+                if recorded_payload.get("vehicle_id") != vehicle_id:
+                    continue
+                sequence = recorded_payload.get("sequence")
+                if type(sequence) is not int or sequence < 1:
+                    raise AuditIntegrityError("Command-start record has an invalid sequence")
+                last_sequence = max(last_sequence, sequence)
+            return self._record_locked(
+                "command_execution_started",
+                correlation_id,
+                {**payload, "sequence": last_sequence + 1},
+            )
+
+    def _record_locked(
+        self,
+        event_type: str,
+        correlation_id: str,
+        payload: dict[str, Any],
+    ) -> AuditEvent:
+        """Append an event while :meth:`_append_lock` is held."""
         existing_events = self.read_all()
         previous_hash = existing_events[-1]["event_hash"] if existing_events else None
         event_id = uuid4()
@@ -63,13 +144,61 @@ class JsonlAuditJournal:
             previous_hash=previous_hash,
             event_hash=self._hash_event(unsigned_event),
         )
-        self.path.parent.mkdir(parents=True, exist_ok=True)
         encoded = self._canonical_json(asdict(event))
         with self.path.open("a", encoding="utf-8", newline="\n") as handle:
             handle.write(f"{encoded}\n")
             handle.flush()
             os.fsync(handle.fileno())
         return event
+
+    @contextmanager
+    def _append_lock(self):
+        """Serialize one read-hash-append transaction across local processes.
+
+        The sidecar lock is advisory, so every process that writes the journal
+        must use this class.  It deliberately remains in place after release:
+        the operating-system lock, rather than deleting a sentinel file,
+        determines ownership and is released if a writer process crashes.
+        """
+        with self._lock:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            lock_path = self.path.with_suffix(f"{self.path.suffix}.lock")
+            with lock_path.open("a+b") as handle:
+                handle.seek(0)
+                handle.write(b"\\0")
+                handle.flush()
+                try:
+                    self._lock_file(handle)
+                except OSError as error:
+                    raise AuditIntegrityError("could not acquire audit journal lock") from error
+                try:
+                    yield
+                finally:
+                    self._unlock_file(handle)
+
+    @staticmethod
+    def _lock_file(handle: Any) -> None:
+        if os.name == "nt":
+            import msvcrt
+
+            handle.seek(0)
+            msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
+            return
+        import fcntl
+
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)  # type: ignore[attr-defined]
+
+    @staticmethod
+    def _unlock_file(handle: Any) -> None:
+        if os.name == "nt":
+            import msvcrt
+
+            handle.seek(0)
+            msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+            return
+        import fcntl
+
+        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)  # type: ignore[attr-defined]
 
     def read_all(self) -> list[dict[str, Any]]:
         """Return verified events in order, rejecting corruption or tampering."""

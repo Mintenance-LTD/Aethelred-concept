@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import numpy as np
+import onnx
+import onnxruntime as ort
 import torch
 
 from aethelred.deployment.exporter import ModelExporter, _create_dummy_obs, _InferenceWrapper
@@ -33,6 +36,33 @@ def test_inference_wrapper_is_torchscript_scriptable():
     out = scripted(*_create_dummy_obs(torch.device("cpu")))
 
     assert len(out) == 5
+
+
+def test_eager_torchscript_and_onnx_exports_have_behavioural_parity(tmp_path):
+    policy = TacticalPolicy.build()
+    exporter = ModelExporter(output_dir=str(tmp_path))
+    wrapper = _InferenceWrapper(policy)
+    wrapper.set_to_inference_mode()
+    dummy = _create_dummy_obs(torch.device("cpu"))
+
+    with torch.no_grad():
+        eager_outputs = wrapper(*dummy)
+    torchscript = exporter.export_torchscript(policy, name="parity")
+    scripted_outputs = torch.jit.load(str(torchscript.path))(*dummy)
+    onnx_result = exporter.export_onnx(policy, name="parity")
+    onnx.checker.check_model(str(onnx_result.path))
+    session = ort.InferenceSession(str(onnx_result.path), providers=["CPUExecutionProvider"])
+    onnx_outputs = session.run(
+        None,
+        {
+            name: value.detach().cpu().numpy()
+            for name, value in zip((item.name for item in session.get_inputs()), dummy, strict=True)
+        },
+    )
+
+    for eager, scripted, exported in zip(eager_outputs, scripted_outputs, onnx_outputs, strict=True):
+        np.testing.assert_allclose(scripted.detach().cpu().numpy(), eager.detach().cpu().numpy(), rtol=1e-4, atol=1e-5)
+        np.testing.assert_allclose(exported, eager.detach().cpu().numpy(), rtol=1e-4, atol=1e-5)
 
 
 def test_latency_profile_runs(tmp_path):

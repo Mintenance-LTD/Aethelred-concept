@@ -6,6 +6,7 @@ from uuid import uuid4
 
 import pytest
 
+from aethelred.deployment.attestation import HmacReleaseAttestor
 from aethelred.deployment.model_manifest import ModelManifest
 from aethelred.deployment.promotion import (
     HeldOutEvaluation,
@@ -16,11 +17,13 @@ from aethelred.deployment.promotion import (
 from aethelred.deployment.release_ledger import ReleaseLedger
 from aethelred.runtime.audit import JsonlAuditJournal
 
+_ATTESTOR = HmacReleaseAttestor("sil-attestor", b"a" * 32)
+
 
 def _approved(model_name: str):
     report_hash = ("a" if model_name == "baseline.pt" else "b") * 64
     manifest = ModelManifest(
-        schema_version="1.0",
+        schema_version="1.1",
         model_name=model_name,
         model_sha256="c" * 64,
         code_revision="abc123",
@@ -28,6 +31,9 @@ def _approved(model_name: str):
         observation_schema="aethelred-observation/v1",
         evaluation_report_sha256=report_hash,
         runtime_target="torchscript",
+        training_data_reference="dataset://held-out/v1",
+        runtime_environment="python=3.11;torch=2.2",
+        build_provenance="build://ci/123",
     )
     evaluation = HeldOutEvaluation(
         candidate_id=uuid4(),
@@ -37,11 +43,8 @@ def _approved(model_name: str):
         safety_checks={"authorisation": True},
         report_sha256=report_hash,
     )
-    return ModelPromotionGate().approve(
-        manifest,
-        evaluation,
-        HumanApproval.now("approver@example.test", "Held-out review complete"),
-    )
+    approval = HumanApproval.now("approver@example.test", "Held-out review complete")
+    return ModelPromotionGate().approve(manifest, evaluation, approval, _ATTESTOR.attest(manifest, evaluation, approval), _ATTESTOR)
 
 
 def test_release_lifecycle_is_durable_and_rollback_is_accountable(tmp_path) -> None:

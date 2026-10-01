@@ -8,15 +8,16 @@ executable command.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+import re
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 from enum import Enum
 from math import isfinite
 from typing import Protocol
 from uuid import UUID, uuid4
 
-from aethelred.core.models import Vec2
-from aethelred.runtime.audit import JsonlAuditJournal
+from aethelred.runtime.audit import AuditIntegrityError, JsonlAuditJournal
+from aethelred.runtime.geometry import Coordinates, Position
 
 
 class MissionCapability(str, Enum):
@@ -42,17 +43,19 @@ class AuthorisationOutcome(str, Enum):
 class OperatingArea:
     """Closed two-dimensional area an approved mission may occupy."""
 
-    minimum: Vec2
-    maximum: Vec2
+    minimum: Coordinates
+    maximum: Coordinates
 
     def __post_init__(self) -> None:
+        object.__setattr__(self, "minimum", Position.copy_of(self.minimum))
+        object.__setattr__(self, "maximum", Position.copy_of(self.maximum))
         values = (self.minimum.x, self.minimum.y, self.maximum.x, self.maximum.y)
         if not all(isfinite(value) for value in values):
             raise ValueError("Operating-area bounds must be finite")
         if self.minimum.x > self.maximum.x or self.minimum.y > self.maximum.y:
             raise ValueError("Operating-area minimum must not exceed maximum")
 
-    def contains(self, position: Vec2) -> bool:
+    def contains(self, position: Coordinates) -> bool:
         """Return whether a finite position lies inside or on the mission boundary."""
         if not isfinite(position.x) or not isfinite(position.y):
             return False
@@ -76,6 +79,9 @@ class Mission:
     authorised_issuer_ids: frozenset[str]
 
     def __post_init__(self) -> None:
+        object.__setattr__(self, "allowed_capabilities", frozenset(self.allowed_capabilities))
+        object.__setattr__(self, "assigned_vehicle_ids", frozenset(self.assigned_vehicle_ids))
+        object.__setattr__(self, "authorised_issuer_ids", frozenset(self.authorised_issuer_ids))
         if self.revision < 1:
             raise ValueError("Mission revision must be positive")
         if self.valid_from.tzinfo is None or self.valid_until.tzinfo is None:
@@ -95,7 +101,7 @@ class WorldState:
     revision: int
     observed_at: datetime
     vehicle_id: str
-    position: Vec2
+    position: Coordinates
     healthy: bool
     navigation_valid: bool
     battery_reserve: float
@@ -104,6 +110,59 @@ class WorldState:
     communications_healthy: bool
     operator_link_active: bool
     runtime_healthy: bool
+    observation: ObservationProvenance
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "position", Position.copy_of(self.position))
+
+
+@dataclass(frozen=True)
+class ObservationProvenance:
+    """Versioned source metadata for the observation used to form world state."""
+
+    observation_id: UUID
+    source_id: str
+    coordinate_frame: str
+    schema_version: str
+    sequence: int
+    uncertainty: float
+
+    def __post_init__(self) -> None:
+        if not all(value.strip() for value in (self.source_id, self.coordinate_frame, self.schema_version)):
+            raise ValueError("Observation source, coordinate frame, and schema version are required")
+        if self.sequence < 0:
+            raise ValueError("Observation sequence must not be negative")
+        if not isfinite(self.uncertainty) or not 0.0 <= self.uncertainty <= 1.0:
+            raise ValueError("Observation uncertainty must be a finite ratio")
+
+
+@dataclass(frozen=True)
+class RuntimeIdentity:
+    """Immutable release identities that make an operational audit trace attributable."""
+
+    release_id: UUID
+    software_revision: str
+    model_sha256: str
+    configuration_sha256: str
+
+    def __post_init__(self) -> None:
+        if not self.software_revision.strip():
+            raise ValueError("Runtime software revision is required")
+        for value, name in (
+            (self.model_sha256, "model digest"),
+            (self.configuration_sha256, "configuration digest"),
+        ):
+            if re.fullmatch(r"[0-9a-f]{64}", value) is None:
+                raise ValueError(f"Runtime {name} must be a lowercase SHA-256 digest")
+
+    def audit_payload(self) -> dict[str, str]:
+        """Return identity metadata suitable for structured audit payloads."""
+        return {
+            "release_id": str(self.release_id),
+            "software_revision": self.software_revision,
+            "model_sha256": self.model_sha256,
+            "configuration_sha256": self.configuration_sha256,
+        }
 
 
 @dataclass(frozen=True)
@@ -117,8 +176,12 @@ class IntentProposal:
     state_revision: int
     vehicle_id: str
     capability: MissionCapability
-    target_position: Vec2 | None
+    target_position: Coordinates | None
     expires_at: datetime
+
+    def __post_init__(self) -> None:
+        if self.target_position is not None:
+            object.__setattr__(self, "target_position", Position.copy_of(self.target_position))
 
 
 @dataclass(frozen=True)
@@ -131,9 +194,15 @@ class AuthorisedCommand:
     mission_revision: int
     vehicle_id: str
     capability: MissionCapability
-    target_position: Vec2 | None
+    target_position: Coordinates | None
     expires_at: datetime
     rule_ids: tuple[str, ...]
+    sequence: int = 0
+
+    def __post_init__(self) -> None:
+        if self.target_position is not None:
+            object.__setattr__(self, "target_position", Position.copy_of(self.target_position))
+        object.__setattr__(self, "rule_ids", tuple(self.rule_ids))
 
 
 @dataclass(frozen=True)
@@ -153,7 +222,12 @@ class CommandReceipt:
     command_id: UUID
     accepted: bool
     recorded_at: datetime
+    sequence: int
     detail: str = ""
+
+
+class CommandExecutionError(RuntimeError):
+    """Raised when an adapter cannot provide a valid positive acknowledgement."""
 
 
 class AuthorisedCommandExecutor(Protocol):
@@ -170,6 +244,7 @@ class OperationalSafetySupervisor:
     max_sensor_age: timedelta = field(default=timedelta(seconds=1))
     min_battery_reserve: float = 0.20
     min_localisation_quality: float = 0.75
+    max_observation_uncertainty: float = 0.25
 
     def authorise(
         self,
@@ -199,6 +274,8 @@ class OperationalSafetySupervisor:
         telemetry_values = (state.battery_reserve, state.localisation_quality)
         if not all(isfinite(value) and 0.0 <= value <= 1.0 for value in telemetry_values):
             return self._reject("telemetry_values", "Operational telemetry values must be finite ratios")
+        if state.observation.uncertainty > self.max_observation_uncertainty:
+            return self._reject("observation_uncertainty", "Observation uncertainty exceeds the runtime limit")
         if proposal.mission_id != mission.mission_id or proposal.mission_revision != mission.revision:
             return self._reject("mission_identity", "Proposal does not match the approved mission")
         if proposal.vehicle_id != state.vehicle_id or proposal.vehicle_id not in mission.assigned_vehicle_ids:
@@ -270,9 +347,15 @@ class OperationalSafetySupervisor:
 class CommandArbiter:
     """The sole execution boundary for an authorised operational command."""
 
-    def __init__(self, journal: JsonlAuditJournal | None = None) -> None:
+    def __init__(
+        self,
+        journal: JsonlAuditJournal | None = None,
+        runtime_identity: RuntimeIdentity | None = None,
+    ) -> None:
         self._journal = journal
+        self._runtime_identity = runtime_identity
         self._consumed_command_ids: set[UUID] = set()
+        self._last_sequence_by_vehicle: dict[str, int] = {}
         if journal is not None:
             self._recover_consumed_commands()
 
@@ -304,37 +387,76 @@ class CommandArbiter:
             self._record_rejection(str(command.command_id), "Authorised command has already been consumed")
             raise PermissionError("Authorised command has already been consumed")
 
+        if self._journal is not None:
+            try:
+                start_event = self._journal.record_command_execution_started(
+                    correlation_id=str(command.command_id),
+                    payload={
+                        **self._identity_payload(),
+                        "proposal_id": str(command.proposal_id),
+                        "mission_id": str(command.mission_id),
+                        "vehicle_id": command.vehicle_id,
+                        "capability": command.capability.value,
+                    },
+                )
+            except (AuditIntegrityError, ValueError) as error:
+                raise CommandExecutionError("Could not durably allocate command sequence") from error
+            sequence = start_event.payload["sequence"]
+            assert type(sequence) is int
+        else:
+            sequence = self._last_sequence_by_vehicle.get(command.vehicle_id, 0) + 1
+        command = replace(command, sequence=sequence)
+        self._last_sequence_by_vehicle[command.vehicle_id] = sequence
         # Consume before adapter invocation: a timeout or exception cannot be
         # safely distinguished from a partially applied external command.
         self._consumed_command_ids.add(command.command_id)
-        if self._journal is not None:
-            self._journal.record(
-                "command_execution_started",
-                correlation_id=str(command.command_id),
-                payload={
-                    "proposal_id": str(command.proposal_id),
-                    "mission_id": str(command.mission_id),
-                    "vehicle_id": command.vehicle_id,
-                    "capability": command.capability.value,
-                },
-            )
         try:
             receipt = executor.execute(command)
         except Exception as error:
             self._record_rejection(str(command.command_id), f"Adapter execution failed: {error}")
-            raise
+            raise CommandExecutionError("Adapter execution failed") from error
+        if not isinstance(receipt, CommandReceipt):
+            self._record_rejection(str(command.command_id), "Adapter returned an invalid receipt")
+            raise CommandExecutionError("Adapter returned an invalid receipt")
         if receipt.command_id != command.command_id:
             self._record_rejection(str(command.command_id), "Adapter receipt command ID does not match")
-            raise RuntimeError("Adapter receipt command ID does not match authorised command")
+            raise CommandExecutionError("Adapter receipt command ID does not match authorised command")
+        if receipt.sequence != command.sequence:
+            self._record_rejection(str(command.command_id), "Adapter receipt sequence does not match")
+            raise CommandExecutionError("Adapter receipt sequence does not match authorised command")
+        if receipt.recorded_at.tzinfo is None:
+            self._record_rejection(str(command.command_id), "Adapter receipt time must be timezone-aware")
+            raise CommandExecutionError("Adapter receipt time must be timezone-aware")
+        if type(receipt.accepted) is not bool:
+            self._record_rejection(str(command.command_id), "Adapter receipt acceptance must be boolean")
+            raise CommandExecutionError("Adapter receipt acceptance must be boolean")
+        if not receipt.accepted:
+            if self._journal is not None:
+                self._journal.record(
+                    "command_nacked",
+                    correlation_id=str(command.command_id),
+                    payload={
+                        **self._identity_payload(),
+                        "proposal_id": str(command.proposal_id),
+                        "mission_id": str(command.mission_id),
+                        "vehicle_id": command.vehicle_id,
+                        "capability": command.capability.value,
+                        "sequence": command.sequence,
+                        "detail": receipt.detail,
+                    },
+                )
+            raise CommandExecutionError("Adapter negatively acknowledged authorised command")
         if self._journal is not None:
             self._journal.record(
                 "command_executed",
                 correlation_id=str(command.command_id),
                 payload={
+                    **self._identity_payload(),
                     "proposal_id": str(command.proposal_id),
                     "mission_id": str(command.mission_id),
                     "vehicle_id": command.vehicle_id,
                     "capability": command.capability.value,
+                    "sequence": command.sequence,
                     "accepted": receipt.accepted,
                     "detail": receipt.detail,
                 },
@@ -350,12 +472,23 @@ class CommandArbiter:
                 continue
             try:
                 command_id = UUID(str(event["correlation_id"]))
+                payload = event["payload"]
+                if not isinstance(payload, dict):
+                    raise TypeError("command payload must be a mapping")
+                vehicle_id = str(payload["vehicle_id"])
+                sequence = payload.get("sequence")
             except (KeyError, TypeError, ValueError) as error:
                 raise ValueError("Invalid executed-command audit record") from error
             if event_type == "command_execution_started":
                 if command_id in self._consumed_command_ids:
                     raise ValueError("Duplicate command-execution start audit record")
                 self._consumed_command_ids.add(command_id)
+                if sequence is not None:
+                    if not isinstance(sequence, int) or sequence < 1:
+                        raise ValueError("Invalid command sequence audit record")
+                    self._last_sequence_by_vehicle[vehicle_id] = max(
+                        self._last_sequence_by_vehicle.get(vehicle_id, 0), sequence
+                    )
             elif command_id not in self._consumed_command_ids:
                 # Support journals written before execution-start events were
                 # introduced, while still treating their completed commands as
@@ -372,8 +505,11 @@ class CommandArbiter:
             self._journal.record(
                 "command_rejected",
                 correlation_id=correlation_id,
-                payload={"reason": reason, "rule_ids": rule_ids},
+                payload={**self._identity_payload(), "reason": reason, "rule_ids": rule_ids},
             )
+
+    def _identity_payload(self) -> dict[str, str]:
+        return {} if self._runtime_identity is None else self._runtime_identity.audit_payload()
 
 
 class OperationalControlLoop:
@@ -388,10 +524,17 @@ class OperationalControlLoop:
         self,
         safety_supervisor: OperationalSafetySupervisor,
         journal: JsonlAuditJournal,
+        runtime_identity: RuntimeIdentity | None = None,
     ) -> None:
         self._safety_supervisor = safety_supervisor
         self._journal = journal
-        self._arbiter = CommandArbiter(journal)
+        self._runtime_identity = runtime_identity
+        self._arbiter = CommandArbiter(journal, runtime_identity)
+
+    @property
+    def runtime_identity(self) -> RuntimeIdentity | None:
+        """Return the immutable attribution record bound to this command path."""
+        return self._runtime_identity
 
     def submit(
         self,
@@ -424,6 +567,7 @@ class OperationalControlLoop:
             "telemetry_observed",
             correlation_id=correlation_id,
             payload={
+                **self._identity_payload(),
                 "vehicle_id": state.vehicle_id,
                 "state_revision": state.revision,
                 "observed_at": state.observed_at,
@@ -436,12 +580,19 @@ class OperationalControlLoop:
                 "communications_healthy": state.communications_healthy,
                 "operator_link_active": state.operator_link_active,
                 "runtime_healthy": state.runtime_healthy,
+                "observation_id": str(state.observation.observation_id),
+                "observation_source_id": state.observation.source_id,
+                "coordinate_frame": state.observation.coordinate_frame,
+                "observation_schema_version": state.observation.schema_version,
+                "observation_sequence": state.observation.sequence,
+                "observation_uncertainty": state.observation.uncertainty,
             },
         )
         self._journal.record(
             "intent_proposed",
             correlation_id=correlation_id,
             payload={
+                **self._identity_payload(),
                 "policy_id": proposal.policy_id,
                 "mission_id": str(proposal.mission_id),
                 "mission_revision": proposal.mission_revision,
@@ -455,6 +606,7 @@ class OperationalControlLoop:
             "safety_decision",
             correlation_id=correlation_id,
             payload={
+                **self._identity_payload(),
                 "outcome": result.outcome.value,
                 "rule_ids": result.rule_ids,
                 "reason": result.reason,
@@ -462,6 +614,9 @@ class OperationalControlLoop:
             },
         )
         return self._arbiter.execute(executor, result, now)
+
+    def _identity_payload(self) -> dict[str, str]:
+        return {} if self._runtime_identity is None else self._runtime_identity.audit_payload()
 
 
 class AuthenticatedOperationalControlLoop:
@@ -472,10 +627,16 @@ class AuthenticatedOperationalControlLoop:
         control_loop: OperationalControlLoop,
         authenticator: object,
         mission_registry: object,
+        lifecycle: object,
+        configuration_registry: object,
+        health_supervisor: object,
     ) -> None:
         self._control_loop = control_loop
         self._authenticator = authenticator
         self._mission_registry = mission_registry
+        self._lifecycle = lifecycle
+        self._configuration_registry = configuration_registry
+        self._health_supervisor = health_supervisor
 
     def submit(
         self,
@@ -489,11 +650,17 @@ class AuthenticatedOperationalControlLoop:
 
         Imports are deferred to avoid a runtime-contract import cycle.
         """
+        from aethelred.runtime.configuration import (
+            RuntimeConfigurationError,
+            RuntimeConfigurationRegistry,
+        )
+        from aethelred.runtime.health import RuntimeHealthError, RuntimeHealthSupervisor
         from aethelred.runtime.integrity import (
             AuthenticatedIntent,
             IntegrityError,
             IntentAuthenticator,
         )
+        from aethelred.runtime.lifecycle import RuntimeLifecycleError, RuntimeLifecycleSupervisor
         from aethelred.runtime.missions import MissionRegistry, MissionRegistryError
 
         if not isinstance(self._authenticator, IntentAuthenticator):
@@ -502,6 +669,41 @@ class AuthenticatedOperationalControlLoop:
             raise TypeError("Authenticated loop requires an AuthenticatedIntent")
         if not isinstance(self._mission_registry, MissionRegistry):
             raise TypeError("Authenticated loop requires a MissionRegistry")
+        if not isinstance(self._lifecycle, RuntimeLifecycleSupervisor):
+            raise TypeError("Authenticated loop requires a RuntimeLifecycleSupervisor")
+        if not isinstance(self._configuration_registry, RuntimeConfigurationRegistry):
+            raise TypeError("Authenticated loop requires a RuntimeConfigurationRegistry")
+        if not isinstance(self._health_supervisor, RuntimeHealthSupervisor):
+            raise TypeError("Authenticated loop requires a RuntimeHealthSupervisor")
+        if self._control_loop.runtime_identity is None:
+            raise TypeError("Authenticated loop requires a RuntimeIdentity")
+        if self._authenticator.journal is not self._control_loop._journal:
+            raise TypeError("Intent authenticator and control loop must share one audit journal")
+        if self._configuration_registry.journal is not self._control_loop._journal:
+            raise TypeError("Configuration registry and control loop must share one audit journal")
+        if self._health_supervisor.journal is not self._control_loop._journal:
+            raise TypeError("Health supervisor and control loop must share one audit journal")
+        if self._health_supervisor.lifecycle is not self._lifecycle:
+            raise TypeError("Health supervisor and control loop must share one lifecycle supervisor")
+        try:
+            active_configuration = self._configuration_registry.active()
+        except RuntimeConfigurationError as error:
+            self._control_loop._journal.record(
+                "runtime_configuration_rejected",
+                correlation_id=str(self._control_loop.runtime_identity.release_id),
+                payload={"reason": str(error), **self._control_loop._identity_payload()},
+            )
+            raise PermissionError("No active approved runtime configuration") from error
+        if active_configuration.sha256 != self._control_loop.runtime_identity.configuration_sha256:
+            self._control_loop._journal.record(
+                "runtime_configuration_rejected",
+                correlation_id=str(active_configuration.configuration_id),
+                payload={
+                    "reason": "active configuration digest does not match runtime identity",
+                    **self._control_loop._identity_payload(),
+                },
+            )
+            raise PermissionError("Active runtime configuration does not match release identity")
         try:
             registered_mission = self._mission_registry.require_registered(mission)
         except MissionRegistryError as error:
@@ -511,6 +713,19 @@ class AuthenticatedOperationalControlLoop:
                 payload={"reason": str(error)},
             )
             raise PermissionError("Intent mission is not currently registered") from error
+        try:
+            self._lifecycle.require_active(registered_mission)
+        except RuntimeLifecycleError as error:
+            self._control_loop._journal.record(
+                "runtime_lifecycle_rejected",
+                correlation_id=str(registered_mission.mission_id),
+                payload={"reason": str(error), "state": self._lifecycle.state.value},
+            )
+            raise PermissionError("Runtime lifecycle does not permit command submission") from error
+        try:
+            self._health_supervisor.require_healthy(now)
+        except RuntimeHealthError as error:
+            raise PermissionError("Runtime health is not sufficient for command submission") from error
         proposal = self._authenticator.verify(envelope, now)
         if envelope.issuer_id not in registered_mission.authorised_issuer_ids:
             self._control_loop._journal.record(
@@ -522,8 +737,15 @@ class AuthenticatedOperationalControlLoop:
         self._control_loop._journal.record(
             "intent_authenticated",
             correlation_id=str(proposal.proposal_id),
-            payload={"issuer_id": envelope.issuer_id, "nonce": envelope.nonce},
+            payload={
+                **self._control_loop._identity_payload(),
+                "issuer_id": envelope.issuer_id,
+                "key_id": envelope.key_id,
+                "nonce": envelope.nonce,
+            },
         )
-        return self._control_loop._submit_verified(
-            proposal, state, registered_mission, executor, now
-        )
+        try:
+            return self._control_loop._submit_verified(proposal, state, registered_mission, executor, now)
+        except CommandExecutionError as error:
+            self._lifecycle.enter_safe_state(f"Command adapter failure: {error}")
+            raise

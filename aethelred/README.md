@@ -53,6 +53,89 @@ python scripts/export_model.py --checkpoint checkpoints/best_policy.pt
 
 TensorBoard logs are written to `runs/`; checkpoints to `checkpoints/`.
 
+## Civilian mapping mission and recovery
+
+The deterministic mapping demonstration connects three units through the
+authenticated operational command path. A coordinator partitions a 60 by 40
+metre area into six cells with four sample locations each. Versioned assignment
+leases, acknowledgements, heartbeats, cancellation, and durable progress govern
+ownership. Units visit samples through safety-authorised commands; unfinished
+work is reallocated when an assignment expires.
+
+```bash
+python scripts/run_mapping_mission.py --scenario unit_loss --output .artifacts/mapping-unit-loss
+python scripts/run_mapping_mission.py --scenario comms_loss --output .artifacts/mapping-comms-loss
+python scripts/run_mapping_mission.py --scenario stale_sensor --output .artifacts/mapping-stale-sensor
+python scripts/run_mapping_mission.py --scenario coordinator_restart --output .artifacts/mapping-restart
+```
+
+Use `--scenario nominal` for the baseline. Each output directory must be empty.
+Open `replay.html` for a readable event timeline. `summary.json` reports sample
+completion, elapsed ticks, duplicate visits, travel distance, expired leases,
+rejected intents, and reassignment delay. Verified source journals and the full
+`replay.json` retain assignment, authentication, telemetry, safety, movement,
+command sequence, acknowledgement, and sample evidence.
+
+Mapping coverage here means visitation of specified sample points. This is an
+abstract 2-D movement and energy model, with a deterministic planner and local
+in-process communication. Camera coverage, flight dynamics, networking, learned
+allocation, and target-autopilot SIL remain separate qualification work. The
+task journal has one active coordinator writer; coordinator restart recovers
+existing leases and progress without extending authority. A full vehicle runtime
+restart still requires the lifecycle's explicit safe-state recovery procedure.
+
+Operational positions are copied into immutable values independent of tactical
+types. Configuration and release transitions expose new state only after their
+audit writes succeed. Model integrations must now provide a trusted attestation
+verifier to `ActiveReleaseVerifier(ledger, verifier)`; loading rechecks promotion
+requirements and attestation validity, including after journal recovery.
+
+## Offline allocator comparison
+
+The mapping coordinator accepts allocation proposals through `MappingAllocator`.
+It validates the entire batch before issuing task leases: vehicles must be idle,
+available, assigned to the mission, and healthy enough; tasks must be pending;
+no vehicle or task may appear twice. A proposed allocation does not authorise a
+vehicle command. Every resulting movement still uses the authenticated safety
+and command path.
+
+```bash
+python scripts/benchmark_mapping_allocators.py --output .artifacts/mapping-benchmark
+```
+
+This trains a four-coefficient ridge model offline to predict task duration from
+travel distance, speed, remaining route length, and sample count. Training uses
+seeds 0–63, validation uses 500–515, and the default mission comparison uses
+9100–9103. Overlapping splits are rejected before training. The candidate weights
+are immutable after loading; the coordinator has no training interface.
+
+Three allocators run matched layouts and fault schedules: nearest task, analytic
+batch balancing, and learned batch balancing. The analytic and learned variants
+search the same assignment combinations, isolating the cost model from the
+search method. The default suite runs 20 missions per allocator across nominal,
+unit loss, communications loss, stale sensors, and coordinator restart.
+
+`report.html` presents the comparison; `report.json` records individual outcomes,
+source hashes, environment, split provenance, model digest, and observed command
+boundary violations. Each mission retains its replay and verified journals.
+These synthetic results are descriptive and never activate a production release.
+Scenarios sharing a layout seed are correlated; 20 mission runs do not represent
+20 independent layouts or establish statistical significance.
+The learned candidate must improve mean completion ticks against both controls
+with full completion, zero duplicate visits, and zero observed command-boundary
+violations to clear the local comparison. Clearing that comparison alone does
+not establish operational readiness or approval.
+
+Run an individual experimental candidate with:
+
+```bash
+python scripts/run_mapping_mission.py --scenario comms_loss --layout-seed 9200 --allocator learned --model .artifacts/mapping-benchmark/duration-model.json --output .artifacts/learned-mapping
+```
+
+The recorded [reference experiment](experiments/mapping_allocator/README.md)
+includes the measured results and their limits. The nearest-task planner remains
+the default; the learned allocator is an explicit local research option.
+
 ## Testing
 
 ```bash
@@ -87,9 +170,11 @@ future bounded uses such as survey, inspection, mapping, relay, and search.
 `OperationalSafetySupervisor` validates mission identity, vehicle assignment,
 capability allow-lists, state revision/freshness, expiry, and vehicle health;
 only its `AuthorisedCommand` can pass through `CommandArbiter` to an adapter.
-`SimulatorCommandAdapter` is the first adapter: it uses the simulator's
+The simulator-only `SimulatorCommandAdapter` lives in
+`aethelred.simulation.operational_adapter`; it uses the simulator's
 decision-only execution path and maps every allowed operational capability to a
-non-offensive simulator action.
+non-offensive simulator action. It is deliberately excluded from the production
+runtime package because it depends on the simulator's tactical representation.
 
 For a production-facing entry point, `AuthenticatedOperationalControlLoop`
 requires an `AuthenticatedIntent` validated by `IntentAuthenticator` before the

@@ -7,10 +7,24 @@ import json
 import math
 from collections.abc import Callable, Mapping
 from dataclasses import asdict, dataclass
+from enum import StrEnum
 from pathlib import Path
 from uuid import UUID
 
 from aethelred.deployment.promotion import HeldOutEvaluation, PromotionError
+
+
+class OperationalScenarioCategory(StrEnum):
+    """Non-offensive contexts that a releasable policy may be evaluated against."""
+
+    SURVEY = "survey"
+    INSPECTION = "inspection"
+    MAPPING = "mapping"
+    RELAY = "relay"
+    DISASTER_SEARCH = "disaster_search"
+    DEGRADED_GPS = "degraded_gps"
+    DEGRADED_COMMS = "degraded_comms"
+    ADVERSE_WEATHER = "adverse_weather"
 
 
 @dataclass(frozen=True)
@@ -19,6 +33,7 @@ class EvaluationScenario:
 
     scenario_id: str
     distribution: str
+    category: OperationalScenarioCategory = OperationalScenarioCategory.SURVEY
 
     def __post_init__(self) -> None:
         if not self.scenario_id.strip() or not self.distribution.strip():
@@ -72,6 +87,7 @@ class EvaluationReport:
             "candidate_metrics": dict(self.evaluation.candidate_metrics),
             "baseline_metrics": dict(self.evaluation.baseline_metrics),
             "safety_checks": dict(self.evaluation.safety_checks),
+            "scenario_categories": self.evaluation.scenario_categories,
         }
 
 
@@ -94,6 +110,7 @@ class HeldOutEvaluator:
         candidate_metrics = self._mean_metrics(candidate_results)
         baseline_metrics = self._mean_metrics(baseline_results)
         safety_checks = self._aggregate_safety(candidate_results)
+        scenario_categories = tuple(sorted({scenario.category.value for scenario in scenarios}))
         evidence_payload = {
             "candidate_id": str(candidate_id),
             "candidate_model_id": candidate_model_id,
@@ -104,6 +121,7 @@ class HeldOutEvaluator:
             "candidate_metrics": candidate_metrics,
             "baseline_metrics": baseline_metrics,
             "safety_checks": safety_checks,
+            "scenario_categories": scenario_categories,
         }
         report_hash = hashlib.sha256(
             (json.dumps(evidence_payload, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
@@ -115,6 +133,7 @@ class HeldOutEvaluator:
             baseline_metrics=baseline_metrics,
             safety_checks=safety_checks,
             report_sha256=report_hash,
+            scenario_categories=scenario_categories,
         )
         return EvaluationReport(
             evaluation=evaluation,

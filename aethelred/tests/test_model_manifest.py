@@ -22,6 +22,9 @@ def test_manifest_hashes_artifact_report_and_canonical_config(tmp_path):
         configuration={"target_return": 10.0, "device": "cpu"},
         observation_schema="aethelred-observation/v1",
         runtime_target="torchscript",
+        training_data_reference="dataset://held-out/v1",
+        runtime_environment="python=3.11;torch=2.2",
+        build_provenance="build://ci/123",
     )
     path = manifest.write(tmp_path / "policy.manifest.json")
 
@@ -29,6 +32,9 @@ def test_manifest_hashes_artifact_report_and_canonical_config(tmp_path):
     assert payload["model_name"] == "policy.pt"
     assert len(payload["model_sha256"]) == 64
     assert len(payload["evaluation_report_sha256"]) == 64
+    assert payload["training_data_reference"] == "dataset://held-out/v1"
+    assert payload["runtime_environment"] == "python=3.11;torch=2.2"
+    assert payload["build_provenance"] == "build://ci/123"
 
 
 def test_manifest_requires_existing_evaluation_evidence(tmp_path):
@@ -43,6 +49,9 @@ def test_manifest_requires_existing_evaluation_evidence(tmp_path):
             configuration={},
             observation_schema="aethelred-observation/v1",
             runtime_target="torchscript",
+            training_data_reference="dataset://held-out/v1",
+            runtime_environment="python=3.11;torch=2.2",
+            build_provenance="build://ci/123",
         )
 
 
@@ -59,6 +68,9 @@ def test_manifest_verification_rejects_artifact_or_runtime_drift(tmp_path):
         configuration=config,
         observation_schema="aethelred-observation/v1",
         runtime_target="torchscript",
+        training_data_reference="dataset://held-out/v1",
+        runtime_environment="python=3.11;torch=2.2",
+        build_provenance="build://ci/123",
     )
 
     assert manifest.verify_artifact(
@@ -67,6 +79,9 @@ def test_manifest_verification_rejects_artifact_or_runtime_drift(tmp_path):
         configuration={"target_return": 10.0, "device": "cpu"},
         observation_schema="aethelred-observation/v1",
         runtime_target="torchscript",
+        training_data_reference="dataset://held-out/v1",
+        runtime_environment="python=3.11;torch=2.2",
+        build_provenance="build://ci/123",
     ) == model
     model.write_bytes(b"substituted-model")
     with pytest.raises(ValueError, match="digest"):
@@ -76,4 +91,23 @@ def test_manifest_verification_rejects_artifact_or_runtime_drift(tmp_path):
             configuration=config,
             observation_schema="aethelred-observation/v1",
             runtime_target="torchscript",
+            training_data_reference="dataset://held-out/v1",
+            runtime_environment="python=3.11;torch=2.2",
+            build_provenance="build://ci/123",
         )
+
+
+def test_release_provenance_rejects_legacy_manifest():
+    manifest = ModelManifest(
+        schema_version="1.0",
+        model_name="legacy.pt",
+        model_sha256="a" * 64,
+        code_revision="abc123",
+        configuration_sha256="b" * 64,
+        observation_schema="aethelred-observation/v1",
+        evaluation_report_sha256="c" * 64,
+        runtime_target="torchscript",
+    )
+
+    with pytest.raises(ValueError, match="schema 1.1"):
+        manifest.require_complete_provenance()

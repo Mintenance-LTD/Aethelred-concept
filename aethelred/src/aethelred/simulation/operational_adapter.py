@@ -1,4 +1,4 @@
-"""Non-offensive adapter between operational commands and the simulator."""
+"""Simulator-only adapter for exercising authorised operational commands."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from typing import Protocol
 
 from aethelred.core.actions import TacticalAction, TacticalDecision
 from aethelred.core.enums import TacticalActionType
-from aethelred.core.models import BattlefieldState
+from aethelred.core.models import BattlefieldState, Vec2
 from aethelred.runtime.operational import AuthorisedCommand, CommandReceipt, MissionCapability
 
 
@@ -22,7 +22,12 @@ class DecisionSimulation(Protocol):
 
 
 class SimulatorCommandAdapter:
-    """Execute allowed operational capabilities through one simulator decision."""
+    """Exercise bounded operational commands through one simulator decision.
+
+    This adapter belongs to the simulation package because it translates into
+    simulator-specific tactical representations. It is never a production
+    runtime command adapter.
+    """
 
     def __init__(self, simulator: DecisionSimulation) -> None:
         self._simulator = simulator
@@ -35,6 +40,7 @@ class SimulatorCommandAdapter:
                 command_id=command.command_id,
                 accepted=False,
                 recorded_at=datetime.now(UTC),
+                sequence=command.sequence,
                 detail="Simulator has no current world state",
             )
 
@@ -44,7 +50,10 @@ class SimulatorCommandAdapter:
                 TacticalAction(
                     action_type=self._action_type_for(command.capability),
                     target_unit_id=unit.id,
-                    target_position=command.target_position or unit.position,
+                    target_position=(
+                        Vec2(x=command.target_position.x, y=command.target_position.y)
+                        if command.target_position is not None else unit.position
+                    ),
                     priority=1.0,
                 )
                 for unit in state.active_friendlies
@@ -56,6 +65,7 @@ class SimulatorCommandAdapter:
             command_id=command.command_id,
             accepted=True,
             recorded_at=datetime.now(UTC),
+            sequence=command.sequence,
             detail="Executed through simulator decision interface",
         )
 

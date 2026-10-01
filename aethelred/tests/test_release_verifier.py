@@ -2,17 +2,42 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from hashlib import sha256
 from pathlib import Path
 from uuid import uuid4
 
 import pytest
 
+from aethelred.deployment.attestation import HmacReleaseAttestor
 from aethelred.deployment.model_manifest import ModelManifest
 from aethelred.deployment.promotion import HeldOutEvaluation, HumanApproval, ModelPromotionGate
 from aethelred.deployment.release_ledger import ReleaseLedger
 from aethelred.deployment.release_verifier import ActiveReleaseVerifier, ReleaseVerificationError
 from aethelred.runtime.audit import JsonlAuditJournal
+
+_ATTESTOR = HmacReleaseAttestor("sil-attestor", b"a" * 32)
+
+
+def test_recovered_release_with_forged_attestation_never_reaches_loader(tmp_path):
+    model = tmp_path / "policy.pt"
+    model.write_bytes(b"approved-model")
+    (tmp_path / "report.json").write_text("evaluation evidence", encoding="utf-8")
+    _, registration = _activate_release(tmp_path, model)
+    forged = replace(registration.approved_release,
+                     attestation=replace(registration.approved_release.attestation, signature="0" * 64))
+    ledger = ReleaseLedger(JsonlAuditJournal(tmp_path / "forged.jsonl"))
+    entry = ledger.register(forged)
+    ledger.activate(entry.release_id, "operator", "claimed approval")
+    recovered = ReleaseLedger(ledger.journal)
+    called = []
+    with pytest.raises(ReleaseVerificationError):
+        ActiveReleaseVerifier(recovered, _ATTESTOR).load(
+            model, lambda path: called.append(path), code_revision="abc123",
+            configuration={"device": "cpu"}, observation_schema="aethelred-observation/v1",
+            runtime_target="torchscript", training_data_reference="dataset://held-out/v1",
+            runtime_environment="python=3.11;torch=2.2", build_provenance="build://ci/123")
+    assert not called
 
 
 def _activate_release(tmp_path: Path, model_path: Path) -> tuple[ReleaseLedger, object]:
@@ -24,18 +49,21 @@ def _activate_release(tmp_path: Path, model_path: Path) -> tuple[ReleaseLedger, 
         configuration={"device": "cpu"},
         observation_schema="aethelred-observation/v1",
         runtime_target="torchscript",
+        training_data_reference="dataset://held-out/v1",
+        runtime_environment="python=3.11;torch=2.2",
+        build_provenance="build://ci/123",
     )
-    approved = ModelPromotionGate().approve(
-        manifest,
-        HeldOutEvaluation(
+    evaluation = HeldOutEvaluation(
             candidate_id=uuid4(),
             scenario_count=20,
             candidate_metrics={"mission_success": 0.9},
             baseline_metrics={"mission_success": 0.8},
             safety_checks={"authorisation": True},
             report_sha256=report_hash,
-        ),
-        HumanApproval.now("approver@example.test", "Held-out review complete"),
+        )
+    approval = HumanApproval.now("approver@example.test", "Held-out review complete")
+    approved = ModelPromotionGate().approve(
+        manifest, evaluation, approval, _ATTESTOR.attest(manifest, evaluation, approval), _ATTESTOR
     )
     ledger = ReleaseLedger(JsonlAuditJournal(tmp_path / "audit.jsonl"))
     registration = ledger.register(approved)
@@ -49,7 +77,7 @@ def test_active_release_verifier_loads_only_matching_active_artifact(tmp_path):
     model.write_bytes(b"approved-model")
     report.write_text("evaluation evidence", encoding="utf-8")
     ledger, registration = _activate_release(tmp_path, model)
-    verifier = ActiveReleaseVerifier(ledger)
+    verifier = ActiveReleaseVerifier(ledger, _ATTESTOR)
     loaded_paths: list[Path] = []
 
     result = verifier.load(
@@ -59,6 +87,9 @@ def test_active_release_verifier_loads_only_matching_active_artifact(tmp_path):
         configuration={"device": "cpu"},
         observation_schema="aethelred-observation/v1",
         runtime_target="torchscript",
+        training_data_reference="dataset://held-out/v1",
+        runtime_environment="python=3.11;torch=2.2",
+        build_provenance="build://ci/123",
     )
 
     assert result == "loaded-model"
@@ -69,6 +100,9 @@ def test_active_release_verifier_loads_only_matching_active_artifact(tmp_path):
         configuration={"device": "cpu"},
         observation_schema="aethelred-observation/v1",
         runtime_target="torchscript",
+        training_data_reference="dataset://held-out/v1",
+        runtime_environment="python=3.11;torch=2.2",
+        build_provenance="build://ci/123",
     ).registration == registration
 
 
@@ -86,12 +120,35 @@ def test_active_release_verifier_rejects_mismatch_before_loader_runs(tmp_path):
         return "must-not-load"
 
     with pytest.raises(ReleaseVerificationError):
-        ActiveReleaseVerifier(ledger).load(
+        ActiveReleaseVerifier(ledger, _ATTESTOR).load(
             model,
             loader,
             code_revision="wrong-revision",
             configuration={"device": "cpu"},
             observation_schema="aethelred-observation/v1",
             runtime_target="torchscript",
+            training_data_reference="dataset://held-out/v1",
+            runtime_environment="python=3.11;torch=2.2",
+            build_provenance="build://ci/123",
         )
     assert not called
+
+
+def test_active_release_verifier_requires_matching_runtime_provenance(tmp_path):
+    model = tmp_path / "policy.pt"
+    report = tmp_path / "report.json"
+    model.write_bytes(b"approved-model")
+    report.write_text("evaluation evidence", encoding="utf-8")
+    ledger, _ = _activate_release(tmp_path, model)
+
+    with pytest.raises(ReleaseVerificationError):
+        ActiveReleaseVerifier(ledger, _ATTESTOR).verify(
+            model,
+            code_revision="abc123",
+            configuration={"device": "cpu"},
+            observation_schema="aethelred-observation/v1",
+            runtime_target="torchscript",
+            training_data_reference="dataset://held-out/v1",
+            runtime_environment="python=3.11;torch=2.2",
+            build_provenance="build://ci/unapproved",
+        )

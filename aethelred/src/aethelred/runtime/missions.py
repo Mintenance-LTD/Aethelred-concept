@@ -7,8 +7,8 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from aethelred.core.models import Vec2
 from aethelred.runtime.audit import JsonlAuditJournal
+from aethelred.runtime.geometry import Position
 from aethelred.runtime.operational import Mission, MissionCapability, OperatingArea
 
 
@@ -41,7 +41,6 @@ class MissionRegistry:
         if existing is not None and mission.revision <= existing.mission.revision:
             raise MissionRegistryError("Mission revision must strictly increase")
         registration = MissionRegistration(mission, operator, rationale)
-        self._missions[mission.mission_id] = registration
         self._journal.record(
             "mission_registered",
             correlation_id=str(mission.mission_id),
@@ -51,6 +50,7 @@ class MissionRegistry:
                 "rationale": rationale,
             },
         )
+        self._missions[mission.mission_id] = registration
         return registration
 
     def require_registered(self, mission: Mission) -> Mission:
@@ -123,8 +123,8 @@ class MissionRegistry:
             ),
             assigned_vehicle_ids=frozenset(str(value) for value in raw["assigned_vehicle_ids"]),
             operating_area=OperatingArea(
-                minimum=Vec2(x=float(minimum["x"]), y=float(minimum["y"])),
-                maximum=Vec2(x=float(maximum["x"]), y=float(maximum["y"])),
+                minimum=Position(x=float(minimum["x"]), y=float(minimum["y"])),
+                maximum=Position(x=float(maximum["x"]), y=float(maximum["y"])),
             ),
             authorised_issuer_ids=frozenset(str(value) for value in raw["authorised_issuer_ids"]),
         )

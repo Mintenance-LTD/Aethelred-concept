@@ -12,6 +12,11 @@ from datetime import UTC, datetime
 from math import isfinite
 from uuid import UUID
 
+from aethelred.deployment.attestation import (
+    ReleaseAttestation,
+    ReleaseAttestationError,
+    ReleaseAttestationVerifier,
+)
 from aethelred.deployment.model_manifest import ModelManifest
 
 
@@ -29,6 +34,7 @@ class HeldOutEvaluation:
     baseline_metrics: Mapping[str, float]
     safety_checks: Mapping[str, bool]
     report_sha256: str
+    scenario_categories: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if self.scenario_count <= 0:
@@ -38,6 +44,10 @@ class HeldOutEvaluation:
         for name, value in {**self.candidate_metrics, **self.baseline_metrics}.items():
             if not isfinite(value):
                 raise PromotionError(f"Metric {name!r} must be finite")
+        if any(not category.strip() for category in self.scenario_categories):
+            raise PromotionError("Scenario categories must be non-empty")
+        if len(set(self.scenario_categories)) != len(self.scenario_categories):
+            raise PromotionError("Scenario categories must be unique")
 
 
 @dataclass(frozen=True)
@@ -47,6 +57,7 @@ class PromotionPolicy:
     minimum_scenarios: int = 20
     required_metrics: tuple[str, ...] = ("mission_success",)
     require_strict_improvement: bool = True
+    required_scenario_categories: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -76,6 +87,7 @@ class ApprovedModelRelease:
     manifest: ModelManifest
     evaluation: HeldOutEvaluation
     approval: HumanApproval
+    attestation: ReleaseAttestation
 
 
 class ModelPromotionGate:
@@ -94,6 +106,12 @@ class ModelPromotionGate:
             reasons.append(f"failed safety checks: {', '.join(failed_checks)}")
         if not evaluation.safety_checks:
             reasons.append("no safety checks recorded")
+        required_categories = tuple(category.strip() for category in self.policy.required_scenario_categories)
+        if any(not category for category in required_categories):
+            reasons.append("promotion policy has an empty required scenario category")
+        missing_categories = sorted(set(required_categories) - set(evaluation.scenario_categories))
+        if missing_categories:
+            reasons.append("missing required scenario categories: " + ", ".join(missing_categories))
         for metric in self.policy.required_metrics:
             if metric not in evaluation.candidate_metrics or metric not in evaluation.baseline_metrics:
                 reasons.append(f"missing required metric: {metric}")
@@ -110,11 +128,23 @@ class ModelPromotionGate:
         manifest: ModelManifest,
         evaluation: HeldOutEvaluation,
         approval: HumanApproval,
+        attestation: ReleaseAttestation | None = None,
+        attestation_verifier: ReleaseAttestationVerifier | None = None,
     ) -> ApprovedModelRelease:
         """Create an approval record after validating immutable release evidence."""
+        try:
+            manifest.require_complete_provenance()
+        except ValueError as error:
+            raise PromotionError("Manifest provenance is incomplete") from error
         reasons = self.assess(evaluation)
         if reasons:
             raise PromotionError("Candidate is not eligible: " + "; ".join(reasons))
         if manifest.evaluation_report_sha256 != evaluation.report_sha256:
             raise PromotionError("Manifest evaluation hash does not match supplied evidence")
-        return ApprovedModelRelease(manifest=manifest, evaluation=evaluation, approval=approval)
+        if attestation is None or attestation_verifier is None:
+            raise PromotionError("Release attestation is required")
+        try:
+            attestation_verifier.verify(attestation, manifest, evaluation, approval)
+        except ReleaseAttestationError as error:
+            raise PromotionError("Release attestation is invalid") from error
+        return ApprovedModelRelease(manifest=manifest, evaluation=evaluation, approval=approval, attestation=attestation)

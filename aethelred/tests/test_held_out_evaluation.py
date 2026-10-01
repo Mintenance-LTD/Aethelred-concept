@@ -7,7 +7,12 @@ from uuid import uuid4
 
 import pytest
 
-from aethelred.deployment.evaluation import EvaluationScenario, HeldOutEvaluator, ScenarioResult
+from aethelred.deployment.evaluation import (
+    EvaluationScenario,
+    HeldOutEvaluator,
+    OperationalScenarioCategory,
+    ScenarioResult,
+)
 from aethelred.deployment.promotion import PromotionError
 
 
@@ -43,3 +48,14 @@ def test_evaluator_rejects_invalid_or_mismatched_held_out_inputs() -> None:
         evaluator.evaluate(uuid4(), "same", "same", (scenario,), _runner)
     with pytest.raises(PromotionError, match="unique"):
         evaluator.evaluate(uuid4(), "candidate-v2", "baseline-v1", (scenario, scenario), _runner)
+
+
+def test_evaluator_records_non_offensive_scenario_categories() -> None:
+    scenarios = (
+        EvaluationScenario("survey", "held-out", OperationalScenarioCategory.SURVEY),
+        EvaluationScenario("gps-loss", "held-out", OperationalScenarioCategory.DEGRADED_GPS),
+    )
+
+    report = HeldOutEvaluator().evaluate(uuid4(), "candidate-v2", "baseline-v1", scenarios, _runner)
+
+    assert report.evaluation.scenario_categories == ("degraded_gps", "survey")

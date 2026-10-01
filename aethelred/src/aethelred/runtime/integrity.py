@@ -5,10 +5,12 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
+from aethelred.runtime.audit import JsonlAuditJournal
 from aethelred.runtime.operational import IntentProposal
 
 
@@ -22,22 +24,35 @@ class AuthenticatedIntent:
 
     proposal: IntentProposal
     issuer_id: str
+    key_id: str
     issued_at: datetime
     nonce: str
     signature: str
 
 
 class IntentAuthenticator:
-    """Verify HMAC-protected intent envelopes and reject replayed nonces."""
+    """Verify HMAC-protected envelopes with durable nonces and key rotation."""
 
-    def __init__(self, secret: bytes, max_age: timedelta = timedelta(seconds=30)) -> None:
-        if len(secret) < 32:
-            raise ValueError("Intent-authentication secret must contain at least 32 bytes")
+    def __init__(
+        self,
+        secret: bytes,
+        journal: JsonlAuditJournal,
+        max_age: timedelta = timedelta(seconds=30),
+        *,
+        key_id: str = "intent-key-v1",
+    ) -> None:
         if max_age <= timedelta():
             raise ValueError("Intent-envelope max_age must be positive")
-        self._secret = secret
+        self._validate_key(key_id, secret)
+        self._journal = journal
         self._max_age = max_age
-        self._used_nonces: set[str] = set()
+        self._active_key_id = key_id
+        self._verification_keys = {key_id: secret}
+
+    @property
+    def journal(self) -> JsonlAuditJournal:
+        """Return the durable journal that records consumed intent nonces."""
+        return self._journal
 
     def sign(
         self,
@@ -55,32 +70,94 @@ class IntentAuthenticator:
         envelope_nonce = nonce or str(uuid4())
         if not envelope_nonce:
             raise IntegrityError("Intent nonce is required")
-        signature = self._sign_payload(proposal, issuer_id, timestamp, envelope_nonce)
-        return AuthenticatedIntent(proposal, issuer_id, timestamp, envelope_nonce, signature)
+        signature = self._sign_payload(
+            self._verification_keys[self._active_key_id],
+            proposal,
+            issuer_id,
+            self._active_key_id,
+            timestamp,
+            envelope_nonce,
+        )
+        return AuthenticatedIntent(
+            proposal,
+            issuer_id,
+            self._active_key_id,
+            timestamp,
+            envelope_nonce,
+            signature,
+        )
 
     def verify(self, envelope: AuthenticatedIntent, now: datetime | None = None) -> IntentProposal:
         """Authenticate one envelope once, failing closed on tamper, age, or replay."""
         checked_at = now or datetime.now(UTC)
         if checked_at.tzinfo is None or envelope.issued_at.tzinfo is None:
             raise IntegrityError("Intent timestamps must be timezone-aware")
-        if not envelope.issuer_id.strip() or not envelope.nonce:
-            raise IntegrityError("Intent issuer identity and nonce are required")
+        if not envelope.issuer_id.strip() or not envelope.key_id.strip() or not envelope.nonce:
+            raise IntegrityError("Intent issuer identity, key identity, and nonce are required")
         if envelope.issued_at > checked_at or checked_at - envelope.issued_at > self._max_age:
             raise IntegrityError("Intent envelope has expired or is not yet valid")
+        try:
+            key = self._verification_keys[envelope.key_id]
+        except KeyError as error:
+            raise IntegrityError("Intent envelope key is not trusted") from error
         expected = self._sign_payload(
-            envelope.proposal, envelope.issuer_id, envelope.issued_at, envelope.nonce
+            key,
+            envelope.proposal,
+            envelope.issuer_id,
+            envelope.key_id,
+            envelope.issued_at,
+            envelope.nonce,
         )
         if not hmac.compare_digest(envelope.signature, expected):
             raise IntegrityError("Intent envelope signature is invalid")
-        if envelope.nonce in self._used_nonces:
+        nonce_record = self._journal.record_once(
+            "intent_nonce_consumed",
+            correlation_id=envelope.nonce,
+            payload={
+                "issuer_id": envelope.issuer_id,
+                "key_id": envelope.key_id,
+                "proposal_id": str(envelope.proposal.proposal_id),
+                "issued_at": envelope.issued_at,
+            },
+        )
+        if nonce_record is None:
             raise IntegrityError("Intent envelope nonce has already been used")
-        self._used_nonces.add(envelope.nonce)
         return envelope.proposal
+
+    def rotate(
+        self,
+        key_id: str,
+        secret: bytes,
+        retire_key_ids: Iterable[str] = (),
+    ) -> None:
+        """Select a new signing key and optionally remove retired verification keys.
+
+        Secrets remain in the caller's identity store. The audit journal records
+        only key identifiers, never key material.
+        """
+        self._validate_key(key_id, secret)
+        retired = tuple(retire_key_ids)
+        if key_id in retired:
+            raise ValueError("The active signing key cannot be retired")
+        unknown = [retired_key for retired_key in retired if retired_key not in self._verification_keys]
+        if unknown:
+            raise ValueError("Cannot retire an untrusted intent key")
+        self._verification_keys[key_id] = secret
+        for retired_key in retired:
+            del self._verification_keys[retired_key]
+        self._active_key_id = key_id
+        self._journal.record(
+            "intent_authentication_key_rotated",
+            correlation_id=key_id,
+            payload={"retired_key_ids": retired},
+        )
 
     def _sign_payload(
         self,
+        secret: bytes,
         proposal: IntentProposal,
         issuer_id: str,
+        key_id: str,
         issued_at: datetime,
         nonce: str,
     ) -> str:
@@ -96,8 +173,16 @@ class IntentAuthenticator:
             "target_position": None if target is None else {"x": target.x, "y": target.y},
             "expires_at": proposal.expires_at.isoformat(),
             "issuer_id": issuer_id,
+            "key_id": key_id,
             "issued_at": issued_at.isoformat(),
             "nonce": nonce,
         }
         encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
-        return hmac.new(self._secret, encoded, hashlib.sha256).hexdigest()
+        return hmac.new(secret, encoded, hashlib.sha256).hexdigest()
+
+    @staticmethod
+    def _validate_key(key_id: str, secret: bytes) -> None:
+        if not key_id.strip():
+            raise ValueError("Intent-authentication key identity is required")
+        if len(secret) < 32:
+            raise ValueError("Intent-authentication secret must contain at least 32 bytes")

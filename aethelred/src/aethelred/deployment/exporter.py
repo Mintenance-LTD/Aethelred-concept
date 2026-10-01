@@ -116,26 +116,35 @@ class ModelExporter:
 
         path = self.output_dir / f"{name}.onnx"
 
-        torch.onnx.export(
-            wrapper,
-            dummy,
-            str(path),
-            opset_version=opset_version,
-            input_names=[
-                "friendlies", "friendly_mask", "threats", "threat_mask",
-                "objectives", "terrain", "globals_vec",
-            ],
-            output_names=["action_type", "target_x", "target_y", "priority", "formation"],
-            dynamic_axes={
-                "friendlies": {0: "batch"},
-                "friendly_mask": {0: "batch"},
-                "threats": {0: "batch"},
-                "threat_mask": {0: "batch"},
-                "objectives": {0: "batch"},
-                "terrain": {0: "batch"},
-                "globals_vec": {0: "batch"},
-            },
-        )
+        # PyTorch's inference fast path emits a fused Transformer operator that
+        # ONNX does not support. Disable it only while tracing; the exported
+        # graph then contains standard, portable operations.
+        fastpath_enabled = torch.backends.mha.get_fastpath_enabled()
+        torch.backends.mha.set_fastpath_enabled(False)
+        try:
+            torch.onnx.export(
+                wrapper,
+                dummy,
+                str(path),
+                opset_version=opset_version,
+                dynamo=False,
+                input_names=[
+                    "friendlies", "friendly_mask", "threats", "threat_mask",
+                    "objectives", "terrain", "globals_vec",
+                ],
+                output_names=["action_type", "target_x", "target_y", "priority", "formation"],
+                dynamic_axes={
+                    "friendlies": {0: "batch"},
+                    "friendly_mask": {0: "batch"},
+                    "threats": {0: "batch"},
+                    "threat_mask": {0: "batch"},
+                    "objectives": {0: "batch"},
+                    "terrain": {0: "batch"},
+                    "globals_vec": {0: "batch"},
+                },
+            )
+        finally:
+            torch.backends.mha.set_fastpath_enabled(fastpath_enabled)
 
         size = path.stat().st_size
         logger.info(f"ONNX exported: {path} ({size / 1024 / 1024:.1f} MB)")
@@ -238,10 +247,7 @@ class ModelExporter:
 
         # ONNX (for non-PyTorch runtimes)
         if include_onnx:
-            try:
-                results["onnx"] = self.export_onnx(policy, f"{name}_onnx")
-            except (OSError, RuntimeError, ValueError) as e:
-                logger.warning(f"ONNX export failed: {e}")
+            results["onnx"] = self.export_onnx(policy, f"{name}_onnx")
 
         # Latency profile
         latency = self.profile_latency(policy, budget_ms=budget_ms)
@@ -281,6 +287,7 @@ class _InferenceWrapper(nn.Module):
 
     def set_to_inference_mode(self) -> None:
         """Set all sub-modules to inference mode."""
+        self.eval()
         self.encoder.requires_grad_(False)
         self.transformer.requires_grad_(False)
 
