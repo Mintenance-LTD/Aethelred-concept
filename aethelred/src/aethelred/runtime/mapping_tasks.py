@@ -9,6 +9,8 @@ from uuid import UUID, uuid5
 from aethelred.runtime.audit import JsonlAuditJournal
 from aethelred.runtime.geometry import Position
 from aethelred.runtime.mapping_allocation import (
+    ContextualMappingAllocator,
+    MappingAllocationContext,
     MappingAllocator,
     NearestTaskAllocator,
     TaskAssignment,
@@ -159,18 +161,26 @@ class MappingCoordinator:
         self._check_time(now)
         self.expire(now)
         occupied = {t.vehicle_id for t in self.tasks if t.status in {TaskStatus.ASSIGNED, TaskStatus.RUNNING}}
-        eligible = [v for v in vehicles if v.available and v.vehicle_id not in occupied
+        observed = [v for v in vehicles if v.available
                     and v.vehicle_id in self.mission.assigned_vehicle_ids
                     and isfinite(v.battery_reserve) and .25 <= v.battery_reserve <= 1
                     and isfinite(v.speed) and v.speed > 0
                     and self.mission.operating_area.contains(v.position)]
+        eligible = [v for v in observed if v.vehicle_id not in occupied]
         if len({v.vehicle_id for v in vehicles}) != len(vehicles):
             raise ValueError("Vehicle observations must be unique")
         pending = {t.task_id: t for t in self.tasks if t.status is TaskStatus.PENDING}
         if not eligible or not pending:
             return
-        proposals = tuple(self.allocator.propose(tuple(sorted(eligible, key=lambda v: v.vehicle_id)),
-                                                 tuple(pending.values())))
+        idle = tuple(sorted(eligible, key=lambda v: v.vehicle_id))
+        context = None
+        if isinstance(self.allocator, ContextualMappingAllocator):
+            context = MappingAllocationContext(tuple(sorted(observed, key=lambda v: v.vehicle_id)),
+                                               tuple(t for t in self.tasks
+                                                     if t.status in {TaskStatus.ASSIGNED, TaskStatus.RUNNING}))
+            proposals = tuple(self.allocator.propose_with_context(idle, tuple(pending.values()), context))
+        else:
+            proposals = tuple(self.allocator.propose(idle, tuple(pending.values())))
         known_vehicles = {v.vehicle_id for v in eligible}
         seen_vehicles: set[str] = set()
         seen_tasks: set[UUID] = set()
@@ -186,6 +196,12 @@ class MappingCoordinator:
         self.journal.record("mapping_allocation_proposed", str(self.mission.mission_id), {
             "allocator_id": self.allocator.allocator_id,
             "artifact_sha256": self.allocator.artifact_sha256,
+            **({"observed_context": {
+                "vehicles": [{"vehicle_id": v.vehicle_id, "x": v.position.x, "y": v.position.y,
+                              "speed": v.speed, "battery_reserve": v.battery_reserve}
+                             for v in context.vehicles],
+                "active_tasks": [self._encode(t) for t in context.active_tasks],
+            }} if context is not None else {}),
             "assignments": [{"vehicle_id": p.vehicle_id, "task_id": str(p.task_id)} for p in proposals],
         })
         for proposal in proposals:

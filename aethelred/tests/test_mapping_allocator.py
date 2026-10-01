@@ -107,7 +107,8 @@ def test_benchmark_checksum_binds_the_persisted_report_bytes(tmp_path):
         (output / "report.json").read_bytes()).hexdigest()
 
 
-def test_frozen_benchmark_never_retrains_and_preserves_exact_artifact(tmp_path, monkeypatch):
+@pytest.mark.parametrize("include_workload", [False, True])
+def test_frozen_benchmark_never_retrains_and_preserves_exact_artifact(tmp_path, monkeypatch, include_workload):
     script = Path(__file__).parents[1] / "scripts/benchmark_mapping_allocators.py"
     benchmark = runpy.run_path(str(script))["benchmark"]
     model_path = tmp_path / "frozen.json"
@@ -128,11 +129,19 @@ def test_frozen_benchmark_never_retrains_and_preserves_exact_artifact(tmp_path, 
     monkeypatch.setitem(benchmark.__globals__, "run_case", fake_case)
     output = tmp_path / "evaluation"
     report = benchmark(output, (10000, 10001), ("nominal",), model_path=model_path,
-                       expected_sha256=sha256(original).hexdigest(), excluded_seeds=(9100,))
+                       expected_sha256=sha256(original).hexdigest(), excluded_seeds=(9100,),
+                       include_workload=include_workload)
     assert model_path.read_bytes() == (output / "duration-model.json").read_bytes() == original
     assert report["evaluation_plan"]["frozen_model"]
     assert report["paired_analysis"]["independent_layout_count"] == 2
     assert not report["candidate_clears_local_comparison"]
+    candidate = "mission-workload" if include_workload else "learned-balanced"
+    assert report["candidate"] == candidate
+    assert report["paired_analysis"]["candidate"] == candidate
+    assert len(report["summary"]) == (4 if include_workload else 3)
+    if include_workload:
+        assert report["candidate_sha256"] == report["source_file_sha256"]["workload_allocator.py"]
+        assert len(report["paired_analysis"]["comparisons"]) == 3
 
 
 @pytest.mark.parametrize("mode", ["missing_hash", "wrong_hash", "training", "validation", "previous"])

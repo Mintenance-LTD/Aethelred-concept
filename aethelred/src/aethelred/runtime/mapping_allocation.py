@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 from uuid import UUID
 
 if TYPE_CHECKING:
@@ -22,6 +22,27 @@ class MappingAllocator(Protocol):
 
     def propose(self, vehicles: tuple[MappingVehicle, ...],
                 tasks: tuple[MissionTask, ...]) -> tuple[TaskAssignment, ...]: ...
+
+
+@dataclass(frozen=True)
+class MappingAllocationContext:
+    """Read-only observed fleet and locked work, not future ownership grants."""
+
+    vehicles: tuple[MappingVehicle, ...]
+    active_tasks: tuple[MissionTask, ...]
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "vehicles", tuple(self.vehicles))
+        object.__setattr__(self, "active_tasks", tuple(self.active_tasks))
+
+
+@runtime_checkable
+class ContextualMappingAllocator(Protocol):
+    """Optional extension; existing two-argument allocators remain compatible."""
+
+    def propose_with_context(self, idle_vehicles: tuple[MappingVehicle, ...],
+                             pending_tasks: tuple[MissionTask, ...],
+                             context: MappingAllocationContext) -> tuple[TaskAssignment, ...]: ...
 
 
 class NearestTaskAllocator:

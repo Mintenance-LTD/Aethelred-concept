@@ -105,3 +105,76 @@ and travel, compared with the existing baselines. This cohort is now inspected
 research evidence: any subsequent tuned candidate needs a fresh, predefined
 held-out cohort. Keep local simulation qualification separate from eventual
 autopilot and field qualification.
+
+## Remaining-work planner
+
+The deterministic, simulation-only `mission-workload/v1` candidate plans the
+whole currently available remaining workload. It accounts for busy units' locked
+task prefixes and retains completed samples. Future routes are forecasts, not
+ownership reservations; only the next task for each idle unit is proposed.
+The coordinator still validates every batch and controls all leases. Every
+vehicle movement retains the authenticated intent and safety authorization path.
+
+It minimizes projected completion time under observed constant speeds, using
+subset route dynamic programming and exhaustive fleet partitions. Distance
+breaks ties between retained minimum-time routes; it is not a global travel
+optimizer. Bounds are three units, twelve unfinished cells, and four samples per
+cell. Independent small-case exhaustive-oracle tests check the time objective,
+and mission tests cover all five scenarios, partial progress, restart, and
+rejection of invalid contextual proposals.
+
+The development comparison (four layouts, two scenarios, four planners) completed
+all 32 missions. The candidate was then frozen before evaluating sixteen new
+layouts (11000–11015) with all five scenarios. All 320 final missions completed
+with zero duplicate samples and zero observed command-boundary violations.
+The learned comparator's artifact bytes and coefficients were unchanged.
+
+| Planner | Completed | Mean ticks | Mean distance | Maximum proposal wall time |
+| --- | --- | --- | --- | --- |
+| Nearest task | 80/80 | 26.0750 | 382.12334 | 0.00012 s |
+| Analytic balancing | 80/80 | 25.7625 | 389.10066 | 0.00961 s |
+| Frozen learned balancing | 80/80 | 25.5000 | 381.85370 | 0.00887 s |
+| Remaining workload | 80/80 | 23.0125 | 349.59328 | 1.79917 s |
+
+Against nearest-task, workload planning used 11.74% fewer simulated ticks and
+8.51% less travel. Layout-averaged time and distance improved on all sixteen
+layouts. Individual scenario regressions remain: seed 11011 communications loss
+took 22 ticks versus nearest's 21, and stale sensors took 21 versus nearest's 20.
+Against the learned comparator, one layout used slightly more travel.
+
+Paired workload-minus-baseline layout-cluster bootstrap intervals:
+
+| Baseline | Mean ticks difference | 95% time interval | Mean travel difference | 95% travel interval |
+| --- | --- | --- | --- | --- |
+| Nearest task | -3.0625 | -3.7500 to -2.3750 | -32.53006 | -42.48230 to -23.24211 |
+| Analytic balancing | -2.7500 | -3.5875 to -2.0125 | -39.50739 | -53.79558 to -26.45555 |
+| Frozen learned balancing | -2.4875 | -3.1750 to -1.8875 | -32.26043 | -43.19760 to -21.98631 |
+
+These exploratory, unadjusted intervals describe this synthetic generator only.
+The fixed fault schedule targets mapper-1 at prescribed ticks, not every unit
+or every operational phase. On workload seed 11006, mapper-1 had no active
+assignment at communications loss, so no stale-token rejection was exercised.
+That case is retained, not discarded; rotated active-unit fault testing remains
+necessary before stronger recovery claims.
+
+There is a substantial compute tradeoff: workload proposals totaled 0.457 seconds
+per mission on average and peaked at 1.799 seconds per call. These wall times
+include concurrent-process contention, and are not deadline guarantees. The
+candidate clears the descriptive local mean-time comparison, but remains opt-in
+and simulation-only. Nearest-task is still the default; no production planner
+or model was promoted, registered, or activated.
+
+`WORKLOAD_EVALUATION.md` contains the predefined protocol and exact run commands.
+`WORKLOAD_RESULTS.json` preserves source/split/model provenance, all sixteen
+layouts, all 320 measurements including planning times, and the paired analysis.
+Each compact row follows its explicit `measurement_columns` schema. Full local
+reports, measurements, replays, and verified journals remain under
+`.artifacts/mapping-workload-heldout-20261001/`; the development evidence is under
+`.artifacts/mapping-workload-development-20261001/`.
+
+Next: deadline-bounded planning with a verified deterministic fallback, followed
+by rotated active-unit fault qualification. Battery-aware workload planning and
+return-to-base constraints also remain open. These evaluated layouts are now
+inspected research evidence; use a fresh predefined cohort for future tuned
+candidates. Keep all qualification in local simulation until a flight stack is
+explicitly selected.
