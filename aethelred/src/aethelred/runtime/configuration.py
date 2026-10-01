@@ -73,24 +73,24 @@ class RuntimeConfigurationRegistry:
             registered_by=registered_by,
             rationale=rationale,
         )
-        self._records[record.configuration_id] = record
         self._journal.record(
             "runtime_configuration_registered",
             correlation_id=str(record.configuration_id),
             payload=self._record_payload(record),
         )
+        self._records[record.configuration_id] = record
         return record
 
     def activate(self, configuration_id: UUID, operator_id: str, rationale: str) -> RuntimeConfiguration:
         """Make a registered configuration the sole active revision."""
         self._require_actor_and_rationale(operator_id, rationale)
         record = self._require_record(configuration_id)
-        self._active_id = configuration_id
         self._journal.record(
             "runtime_configuration_activated",
             correlation_id=str(configuration_id),
             payload={"operator_id": operator_id, "rationale": rationale, "revision": record.revision},
         )
+        self._active_id = configuration_id
         return record
 
     def rollback(self, configuration_id: UUID, operator_id: str, rationale: str) -> RuntimeConfiguration:
@@ -100,7 +100,6 @@ class RuntimeConfigurationRegistry:
         if configuration_id == self._active_id:
             raise RuntimeConfigurationError("Active runtime configuration cannot be rolled back to itself")
         previous_id = self._active_id
-        self._active_id = configuration_id
         self._journal.record(
             "runtime_configuration_rolled_back",
             correlation_id=str(configuration_id),
@@ -111,6 +110,7 @@ class RuntimeConfigurationRegistry:
                 "revision": record.revision,
             },
         )
+        self._active_id = configuration_id
         return record
 
     def active(self) -> RuntimeConfiguration:

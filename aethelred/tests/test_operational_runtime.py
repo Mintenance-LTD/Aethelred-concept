@@ -86,7 +86,10 @@ class _RecordingSimulation:
 
         return BattlefieldState(
             timestep=self._state.revision,
-            friendly_units=[DroneState(role=DroneRole.RECON, position=self._state.position)],
+            friendly_units=[DroneState(
+                role=DroneRole.RECON,
+                position=Vec2(x=self._state.position.x, y=self._state.position.y),
+            )],
         )
 
     def step_decision(self, decision):

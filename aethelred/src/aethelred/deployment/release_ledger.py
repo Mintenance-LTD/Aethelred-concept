@@ -68,7 +68,6 @@ class ReleaseLedger:
         if release_id in self._registrations:
             raise PromotionError("Release is already registered")
         registration = ReleaseRegistration(release_id, approved_release)
-        self._registrations[release_id] = registration
         self.journal.record(
             "release_registered",
             release_id,
@@ -81,6 +80,7 @@ class ReleaseLedger:
                 },
             },
         )
+        self._registrations[release_id] = registration
         return registration
 
     def activate(self, release_id: str, operator: str, rationale: str) -> ReleaseRegistration:
@@ -88,7 +88,6 @@ class ReleaseLedger:
         registration = self._get_registered(release_id)
         self._validate_actor(operator, rationale)
         previous_release_id = self._active_release_id
-        self._active_release_id = release_id
         self.journal.record(
             "release_activated",
             release_id,
@@ -98,6 +97,7 @@ class ReleaseLedger:
                 "rationale": rationale,
             },
         )
+        self._active_release_id = release_id
         return registration
 
     def rollback(self, target_release_id: str, operator: str, rationale: str) -> RollbackRecord:
@@ -115,7 +115,6 @@ class ReleaseLedger:
             rationale=rationale,
             occurred_at=datetime.now(UTC),
         )
-        self._active_release_id = target_release_id
         self.journal.record(
             "release_rolled_back",
             target_release_id,
@@ -125,6 +124,7 @@ class ReleaseLedger:
                 "rationale": rationale,
             },
         )
+        self._active_release_id = target_release_id
         return record
 
     def recover(self) -> str | None:

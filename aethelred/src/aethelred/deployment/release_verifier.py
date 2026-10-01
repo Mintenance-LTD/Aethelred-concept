@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TypeVar
 
+from aethelred.deployment.attestation import ReleaseAttestationVerifier
+from aethelred.deployment.promotion import ModelPromotionGate, PromotionPolicy
 from aethelred.deployment.release_ledger import ReleaseLedger, ReleaseRegistration
 
 
@@ -28,8 +30,13 @@ Model = TypeVar("Model")
 class ActiveReleaseVerifier:
     """Bind a ledger's active release to one exact artefact and runtime contract."""
 
-    def __init__(self, ledger: ReleaseLedger) -> None:
+    def __init__(
+        self, ledger: ReleaseLedger, attestation_verifier: ReleaseAttestationVerifier,
+        promotion_policy: PromotionPolicy | None = None,
+    ) -> None:
         self._ledger = ledger
+        self._attestation_verifier = attestation_verifier
+        self._promotion_gate = ModelPromotionGate(promotion_policy)
 
     def verify(
         self,
@@ -46,6 +53,11 @@ class ActiveReleaseVerifier:
         """Verify all active-release provenance before exposing a loader path."""
         registration = self._ledger.active_registration()
         try:
+            release = registration.approved_release
+            self._promotion_gate.approve(
+                release.manifest, release.evaluation, release.approval,
+                release.attestation, self._attestation_verifier,
+            )
             verified_path = registration.approved_release.manifest.verify_artifact(
                 model_path,
                 code_revision=code_revision,

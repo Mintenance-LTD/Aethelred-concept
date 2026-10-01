@@ -7,7 +7,7 @@ from typing import Protocol
 
 from aethelred.core.actions import TacticalAction, TacticalDecision
 from aethelred.core.enums import TacticalActionType
-from aethelred.core.models import BattlefieldState
+from aethelred.core.models import BattlefieldState, Vec2
 from aethelred.runtime.operational import AuthorisedCommand, CommandReceipt, MissionCapability
 
 
@@ -50,7 +50,10 @@ class SimulatorCommandAdapter:
                 TacticalAction(
                     action_type=self._action_type_for(command.capability),
                     target_unit_id=unit.id,
-                    target_position=command.target_position or unit.position,
+                    target_position=(
+                        Vec2(x=command.target_position.x, y=command.target_position.y)
+                        if command.target_position is not None else unit.position
+                    ),
                     priority=1.0,
                 )
                 for unit in state.active_friendlies

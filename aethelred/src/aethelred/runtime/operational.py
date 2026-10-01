@@ -16,8 +16,8 @@ from math import isfinite
 from typing import Protocol
 from uuid import UUID, uuid4
 
-from aethelred.core.models import Vec2
 from aethelred.runtime.audit import AuditIntegrityError, JsonlAuditJournal
+from aethelred.runtime.geometry import Coordinates, Position
 
 
 class MissionCapability(str, Enum):
@@ -43,17 +43,19 @@ class AuthorisationOutcome(str, Enum):
 class OperatingArea:
     """Closed two-dimensional area an approved mission may occupy."""
 
-    minimum: Vec2
-    maximum: Vec2
+    minimum: Coordinates
+    maximum: Coordinates
 
     def __post_init__(self) -> None:
+        object.__setattr__(self, "minimum", Position.copy_of(self.minimum))
+        object.__setattr__(self, "maximum", Position.copy_of(self.maximum))
         values = (self.minimum.x, self.minimum.y, self.maximum.x, self.maximum.y)
         if not all(isfinite(value) for value in values):
             raise ValueError("Operating-area bounds must be finite")
         if self.minimum.x > self.maximum.x or self.minimum.y > self.maximum.y:
             raise ValueError("Operating-area minimum must not exceed maximum")
 
-    def contains(self, position: Vec2) -> bool:
+    def contains(self, position: Coordinates) -> bool:
         """Return whether a finite position lies inside or on the mission boundary."""
         if not isfinite(position.x) or not isfinite(position.y):
             return False
@@ -77,6 +79,9 @@ class Mission:
     authorised_issuer_ids: frozenset[str]
 
     def __post_init__(self) -> None:
+        object.__setattr__(self, "allowed_capabilities", frozenset(self.allowed_capabilities))
+        object.__setattr__(self, "assigned_vehicle_ids", frozenset(self.assigned_vehicle_ids))
+        object.__setattr__(self, "authorised_issuer_ids", frozenset(self.authorised_issuer_ids))
         if self.revision < 1:
             raise ValueError("Mission revision must be positive")
         if self.valid_from.tzinfo is None or self.valid_until.tzinfo is None:
@@ -96,7 +101,7 @@ class WorldState:
     revision: int
     observed_at: datetime
     vehicle_id: str
-    position: Vec2
+    position: Coordinates
     healthy: bool
     navigation_valid: bool
     battery_reserve: float
@@ -106,6 +111,9 @@ class WorldState:
     operator_link_active: bool
     runtime_healthy: bool
     observation: ObservationProvenance
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "position", Position.copy_of(self.position))
 
 
 @dataclass(frozen=True)
@@ -168,8 +176,12 @@ class IntentProposal:
     state_revision: int
     vehicle_id: str
     capability: MissionCapability
-    target_position: Vec2 | None
+    target_position: Coordinates | None
     expires_at: datetime
+
+    def __post_init__(self) -> None:
+        if self.target_position is not None:
+            object.__setattr__(self, "target_position", Position.copy_of(self.target_position))
 
 
 @dataclass(frozen=True)
@@ -182,10 +194,15 @@ class AuthorisedCommand:
     mission_revision: int
     vehicle_id: str
     capability: MissionCapability
-    target_position: Vec2 | None
+    target_position: Coordinates | None
     expires_at: datetime
     rule_ids: tuple[str, ...]
     sequence: int = 0
+
+    def __post_init__(self) -> None:
+        if self.target_position is not None:
+            object.__setattr__(self, "target_position", Position.copy_of(self.target_position))
+        object.__setattr__(self, "rule_ids", tuple(self.rule_ids))
 
 
 @dataclass(frozen=True)
