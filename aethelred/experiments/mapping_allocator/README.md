@@ -58,7 +58,50 @@ assignment, safety, and command evidence. The report checksum binds the actual
 persisted JSON bytes. Evaluation seeds overlapping training or validation are
 rejected before artifact creation.
 
-The next research step is a larger, predefined independent layout suite and
-comparison with a planner optimizing remaining mission workload. Any learned
-candidate should demonstrate a useful time/distance tradeoff before deployment
-approval is considered.
+## Independent frozen-model evaluation
+
+The predefined protocol in `INDEPENDENT_EVALUATION.md` was completed on 16 new
+layout seeds (10000–10015), with all five scenarios and all three planners:
+240 missions total. The reference model's exact bytes and coefficients were
+unchanged. No tuning or retraining used these outcomes. All missions completed
+with zero duplicate observations and zero observed command-boundary violations.
+
+| Allocator | Completed | Mean ticks | Mean distance |
+| --- | --- | --- | --- |
+| Nearest task | 80/80 | 23.8625 | 328.25555 |
+| Analytic batch balancing | 80/80 | 22.9125 | 325.50280 |
+| Learned batch balancing | 80/80 | 24.2875 | 330.95500 |
+
+The earlier small learned advantage did **not** generalize to this cohort.
+Learned balancing took 1.78% longer than nearest-task, with 0.82% more travel.
+Its layout-averaged time was better on four layouts, worse on seven, and tied
+on five. Analytic balancing had the best aggregate time and distance here,
+but this alone does not justify changing the production default.
+
+Paired learned-minus-baseline differences, with 95% percentile bootstrap
+intervals resampling complete layout clusters (not individual scenarios):
+
+| Baseline | Mean time difference | Time interval | Mean distance difference | Distance interval |
+| --- | --- | --- | --- | --- |
+| Nearest task | +0.425 ticks | +0.025 to +0.9375 | +2.69945 | -1.81571 to +6.40263 |
+| Analytic balancing | +1.375 ticks | +0.375 to +2.525 | +5.45220 | -1.47347 to +12.78428 |
+
+These are exploratory, unadjusted intervals from a small synthetic cohort;
+they do not establish field performance. Communications-loss cases accounted
+for the largest average time regression versus nearest-task (+1.125 ticks).
+Stale-sensor cases averaged 0.5 ticks faster. Complete scenario breakdowns and
+per-layout differences are retained, rather than reporting only favorable cases.
+
+The candidate fails the existing descriptive local mean-time comparison.
+Nearest-task remains the default. No model was promoted or deployed.
+`INDEPENDENT_RESULTS.json` preserves split/model/source provenance, the analysis,
+all 16 layouts, and all 240 measurements. Each compact measurement row follows
+the explicit `measurement_columns` schema. The report checksum binds the full
+local JSON under `.artifacts/mapping-benchmark-independent-20261001/`, where
+readable reports, individual measurements, replays, and verified journals remain.
+
+The next research step is a planner that considers remaining mission workload
+and travel, compared with the existing baselines. This cohort is now inspected
+research evidence: any subsequent tuned candidate needs a fresh, predefined
+held-out cohort. Keep local simulation qualification separate from eventual
+autopilot and field qualification.

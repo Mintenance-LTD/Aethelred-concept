@@ -1,10 +1,11 @@
-"""Train an offline mapping candidate and compare matched held-out missions."""
+"""Compare trained or frozen offline mapping candidates on matched held-out missions."""
 
 import argparse
 import json
 import platform
 import subprocess
 import sys
+from concurrent.futures import ProcessPoolExecutor
 from dataclasses import asdict
 from hashlib import sha256
 from html import escape
@@ -46,37 +47,135 @@ def boundary_violations(simulation: MappingMissionSimulation) -> int:
     return violations
 
 
-def benchmark(output: Path, seeds: tuple[int, ...], scenarios: tuple[str, ...]) -> dict:
+def run_case(case: tuple[Path, int, str, str, Path]) -> dict:
+    """Independent process job; no shared journals, fitting, or runtime bypass."""
+    output, seed, scenario, name, model_path = case
+    allocator = (NearestTaskAllocator() if name == "nearest-task" else
+                 BalancedTaskAllocator(DurationModel.load(model_path)
+                                       if name == "learned-balanced" else None))
+    layout = MappingLayout.from_seed(seed)
+    simulation = MappingMissionSimulation(output / f"seed-{seed}" / scenario / name,
+                                          scenario, layout=layout, allocator=allocator)
+    result = simulation.run()
+    row = {"seed": seed, "allocator": name, "scenario": scenario,
+           "layout": asdict(layout), "result": asdict(result),
+           "boundary_violations": boundary_violations(simulation)}
+    (simulation.output / "measurement.json").write_text(
+        json.dumps(row, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return row
+
+
+def paired_analysis(rows: list[dict], seeds: tuple[int, ...],
+                    scenarios: tuple[str, ...]) -> dict:
+    """Resample whole layout clusters, keeping matched scenarios together."""
+    indexed = {(r["seed"], r["scenario"], r["allocator"]): r for r in rows}
+    names = ("nearest-task", "analytic-balanced", "learned-balanced")
+    expected = {(seed, scenario, name) for seed in seeds for scenario in scenarios for name in names}
+    if len(indexed) != len(rows) or set(indexed) != expected:
+        raise ValueError("Paired analysis requires exactly one row per matched case")
+    result = {}
+    for baseline in names[:2]:
+        metrics = {}
+        for metric in ("ticks", "distance_travelled"):
+            deltas = [[indexed[seed, scenario, "learned-balanced"]["result"][metric]
+                       - indexed[seed, scenario, baseline]["result"][metric]
+                       for scenario in scenarios] for seed in seeds]
+            layout_means = np.asarray([mean(values) for values in deltas])
+            rng = np.random.default_rng(20261001)
+            samples = rng.choice(layout_means, size=(20000, len(seeds)), replace=True).mean(axis=1)
+            interval = np.quantile(samples, (.025, .975)).tolist() if len(seeds) > 1 else None
+            metrics[metric] = {
+                "mean_paired_difference": float(layout_means.mean()),
+                "layout_mean_differences": dict(zip(map(str, seeds), layout_means.tolist())),
+                "bootstrap_95_percent_interval": interval,
+                "layouts_faster_or_shorter": int((layout_means < 0).sum()),
+                "layouts_slower_or_longer": int((layout_means > 0).sum()),
+                "layouts_tied": int((layout_means == 0).sum()),
+                "by_scenario": {scenario: mean(values[i] for values in deltas)
+                                for i, scenario in enumerate(scenarios)},
+            }
+        result[baseline] = metrics
+    return {"independent_layout_count": len(seeds), "resampling_unit": "layout seed",
+            "bootstrap_seed": 20261001, "bootstrap_resamples": 20000,
+            "difference_direction": "learned minus baseline; negative favors learned",
+            "comparisons": result}
+
+
+def benchmark(output: Path, seeds: tuple[int, ...], scenarios: tuple[str, ...], *,
+              model_path: Path | None = None, expected_sha256: str | None = None,
+              excluded_seeds: tuple[int, ...] = (), workers: int = 1) -> dict:
     if not seeds or len(set(seeds)) != len(seeds) or not scenarios or len(set(scenarios)) != len(scenarios):
         raise ValueError("Held-out seeds and scenarios must be non-empty and unique")
     if any(s not in SCENARIOS for s in scenarios):
         raise ValueError("Unknown scenario")
+    if type(workers) is not int or not 1 <= workers <= 8:
+        raise ValueError("Workers must be between 1 and 8")
     if output.exists() and any(output.iterdir()):
         raise ValueError("Benchmark output directory must be empty")
     # The training split and hyperparameters are fixed before reading held-out layouts.
     training_seeds, validation_seeds = tuple(range(64)), tuple(range(500, 516))
+    frozen_bytes = None
+    if model_path is not None:
+        frozen_bytes = model_path.read_bytes()
+        if expected_sha256 is None or sha256(frozen_bytes).hexdigest() != expected_sha256:
+            raise ValueError("Frozen model SHA256 does not match expected fingerprint")
+        training = json.loads(frozen_bytes)
+        for field in ("training_seeds", "validation_seeds"):
+            values = training.get(field)
+            if (not isinstance(values, list) or not values
+                    or any(type(s) is not int for s in values) or len(set(values)) != len(values)):
+                raise ValueError("Frozen model split provenance must contain unique integer seeds")
+        training_seeds, validation_seeds = tuple(training["training_seeds"]), tuple(training["validation_seeds"])
+        if set(training_seeds) & set(validation_seeds):
+            raise ValueError("Frozen training and validation splits overlap")
+        DurationModel.load(model_path)
+    elif expected_sha256 is not None:
+        raise ValueError("Expected fingerprint requires a frozen model path")
     if set(seeds) & (set(training_seeds) | set(validation_seeds)):
         raise ValueError("Held-out seeds overlap training or validation")
+    if set(seeds) & set(excluded_seeds):
+        raise ValueError("Held-out seeds overlap previously evaluated layouts")
+    revision = subprocess.run(["git", "rev-parse", "HEAD"], cwd=Path(__file__).resolve().parents[2],
+                              capture_output=True, text=True, check=True).stdout.strip()
+    dirty = bool(subprocess.run(["git", "status", "--porcelain"], cwd=Path(__file__).resolve().parents[2],
+                                capture_output=True, text=True, check=True).stdout.strip())
+    source_paths = [Path(__file__).resolve(),
+                    Path(__file__).resolve().parents[1] / "src/aethelred/learning/mapping_allocator.py",
+                    Path(__file__).resolve().parents[1] / "src/aethelred/simulation/mapping_mission.py"]
+    source_paths.extend(sorted((Path(__file__).resolve().parents[1] / "src/aethelred/runtime").glob("*.py")))
+    source_hashes = {p.name: sha256(p.read_bytes()).hexdigest() for p in source_paths}
     model_path = output / "duration-model.json"
-    training = train_duration_model(model_path, training_seeds, validation_seeds)
+    if frozen_bytes is None:
+        training = train_duration_model(model_path, training_seeds, validation_seeds)
+    else:
+        output.mkdir(parents=True, exist_ok=True)
+        model_path.write_bytes(frozen_bytes)
     model = DurationModel.load(model_path)
     allocators = (NearestTaskAllocator(), BalancedTaskAllocator(), BalancedTaskAllocator(model))
     rows = []
     total = len(seeds) * len(scenarios) * len(allocators)
-    for seed in seeds:
-        layout = MappingLayout.from_seed(seed)
-        for scenario in scenarios:
-            for allocator in allocators:
-                name = allocator.allocator_id.split("/")[0]
-                simulation = MappingMissionSimulation(output / f"seed-{seed}" / scenario / name,
-                                                      scenario, layout=layout, allocator=allocator)
-                result = simulation.run()
-                rows.append({"seed": seed, "allocator": name, "scenario": scenario,
-                             "layout": asdict(layout), "result": asdict(result),
-                             "boundary_violations": boundary_violations(simulation)})
-                print(f"[{len(rows)}/{total}] seed={seed} {scenario} {name}: "
-                      f"complete={result.completed} ticks={result.ticks} samples={result.visited_samples}/{result.total_samples}",
-                      flush=True)
+    plan = {"held_out_seeds": seeds, "scenarios": scenarios, "excluded_seeds": excluded_seeds,
+            "candidate_sha256": model.artifact_sha256, "frozen_model": frozen_bytes is not None,
+            "source_revision": revision, "source_file_sha256": source_hashes,
+            "workers": workers, "independent_layout_count": len(seeds),
+            "analysis": "Paired layout-cluster bootstrap, 20000 resamples, seed 20261001, percentile 95% intervals"}
+    (output / "evaluation-plan.json").write_text(json.dumps(plan, indent=2) + "\n", encoding="utf-8")
+    cases = [(output, seed, scenario, a.allocator_id.split("/")[0], model_path)
+             for seed in seeds for scenario in scenarios for a in allocators]
+
+    def collect(results):
+        for row in results:
+            rows.append(row)
+            r = row["result"]
+            print(f"[{len(rows)}/{total}] seed={row['seed']} {row['scenario']} {row['allocator']}: "
+                  f"complete={r['completed']} ticks={r['ticks']} samples={r['visited_samples']}/{r['total_samples']}",
+                  flush=True)
+
+    if workers == 1:
+        collect(map(run_case, cases))
+    else:
+        with ProcessPoolExecutor(max_workers=workers) as executor:
+            collect(executor.map(run_case, cases))
     summary = {}
     for allocator in allocators:
         name = allocator.allocator_id.split("/")[0]
@@ -95,21 +194,19 @@ def benchmark(output: Path, seeds: tuple[int, ...], scenarios: tuple[str, ...]) 
         and candidate["boundary_violations"] == 0
         and all(candidate["mean_ticks"] < summary[name]["mean_ticks"]
                 for name in ("nearest-task", "analytic-balanced")))
-    revision = subprocess.run(["git", "rev-parse", "HEAD"], cwd=Path(__file__).resolve().parents[2],
-                              capture_output=True, text=True, check=True).stdout.strip()
-    dirty = bool(subprocess.run(["git", "status", "--porcelain"], cwd=Path(__file__).resolve().parents[2],
-                                capture_output=True, text=True, check=True).stdout.strip())
-    source_paths = [Path(__file__).resolve(),
-                    Path(__file__).resolve().parents[1] / "src/aethelred/learning/mapping_allocator.py",
-                    Path(__file__).resolve().parents[1] / "src/aethelred/simulation/mapping_mission.py"]
-    source_paths.extend(sorted((Path(__file__).resolve().parents[1] / "src/aethelred/runtime").glob("*.py")))
-    report = {"schema": "mapping-benchmark/v1", "source_revision": revision,
+    if source_hashes != {p.name: sha256(p.read_bytes()).hexdigest() for p in source_paths}:
+        raise ValueError("Benchmark source changed during evaluation; evidence retained but report refused")
+    if sha256(model_path.read_bytes()).hexdigest() != model.artifact_sha256:
+        raise ValueError("Model changed during evaluation; report refused")
+    paired = paired_analysis(rows, seeds, scenarios)
+    report = {"schema": "mapping-benchmark/v2", "source_revision": revision,
               "source_working_tree_dirty": dirty,
               "environment": {"python": platform.python_version(), "numpy": np.__version__,
                               "platform": platform.platform()},
-              "source_file_sha256": {p.name: sha256(p.read_bytes()).hexdigest() for p in source_paths},
+              "source_file_sha256": source_hashes,
               "training": training, "candidate_sha256": model.artifact_sha256,
               "held_out_seeds": list(seeds), "scenarios": list(scenarios),
+              "evaluation_plan": plan, "paired_analysis": paired,
               "summary": summary, "candidate_clears_local_comparison": clears_comparison,
               "deployment_approved": False,
               "interpretation": "Matched synthetic missions, descriptive metrics only; no automatic release promotion.",
@@ -122,6 +219,11 @@ def benchmark(output: Path, seeds: tuple[int, ...], scenarios: tuple[str, ...]) 
                     f"<td>{s['completion_rate']:.0%}</td><td>{s['mean_ticks']:.2f}</td>"
                     f"<td>{s['mean_distance']:.2f}</td><td>{s['duplicate_visits']}</td>"
                     f"<td>{s['boundary_violations']}</td></tr>" for name, s in summary.items())
+    paired_table = "".join(
+        f"<tr><td>{escape(name)}</td><td>{metric}</td><td>{s['mean_paired_difference']:.2f}</td>"
+        f"<td>{escape(str(s['bootstrap_95_percent_interval']))}</td>"
+        f"<td>{s['layouts_faster_or_shorter']}/{s['layouts_slower_or_longer']}/{s['layouts_tied']}</td></tr>"
+        for name, metrics in paired["comparisons"].items() for metric, s in metrics.items())
     (output / "report.html").write_text(f"""<!doctype html><html lang="en"><meta charset="utf-8">
 <title>Aethelred allocator comparison</title><style>body{{font:16px system-ui;max-width:1100px;margin:40px auto;padding:16px}}
 table{{border-collapse:collapse}}td,th{{border:1px solid #ccc;padding:12px;text-align:left}}</style>
@@ -129,6 +231,11 @@ table{{border-collapse:collapse}}td,th{{border:1px solid #ccc;padding:12px;text-
 <p>Candidate clears local comparison: {clears_comparison}. Deployment approved: false.</p>
 <table><tr><th>Allocator</th><th>Missions</th><th>Completed</th><th>Mean ticks</th><th>Mean distance</th>
 <th>Duplicate visits</th><th>Command boundary violations</th></tr>{table}</table>
+<h2>Paired differences across {len(seeds)} independent layouts</h2>
+<p>Learned minus baseline: negative favors learned. Whole layouts are resampled, preserving correlated scenarios.
+Percentile bootstrap intervals describe this synthetic layout generator, not flight performance.</p>
+<table><tr><th>Baseline</th><th>Metric</th><th>Mean difference</th><th>95% interval</th>
+<th>Better/worse/tied layouts</th></tr>{paired_table}</table>
 <p>The analytic and learned planners use the same batch assignment search. The learned model predicts task duration
 from geometry; it was fitted offline on separate seeds. Each matched mission uses the same layout, speeds,
 fault schedule, and command safety path. These are descriptive results from an abstract movement model.</p>
@@ -143,8 +250,14 @@ def main() -> None:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--seeds", type=int, nargs="+", default=[9100, 9101, 9102, 9103])
     parser.add_argument("--scenarios", nargs="+", choices=SCENARIOS, default=list(SCENARIOS))
+    parser.add_argument("--model", type=Path, help="Evaluate an existing model without retraining")
+    parser.add_argument("--expected-sha256", help="Required fingerprint for --model")
+    parser.add_argument("--excluded-seeds", type=int, nargs="*", default=[])
+    parser.add_argument("--workers", type=int, default=1)
     args = parser.parse_args()
-    report = benchmark(args.output, tuple(args.seeds), tuple(args.scenarios))
+    report = benchmark(args.output, tuple(args.seeds), tuple(args.scenarios), model_path=args.model,
+                       expected_sha256=args.expected_sha256, excluded_seeds=tuple(args.excluded_seeds),
+                       workers=args.workers)
     print(json.dumps(report["summary"], indent=2))
     print(f"Report: {args.output.resolve() / 'report.html'}")
 
