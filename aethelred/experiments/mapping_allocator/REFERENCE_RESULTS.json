@@ -1,0 +1,1598 @@
+{
+  "schema": "mapping-benchmark/v1",
+  "original_report_sha256": "0e7d6cd204349b6b7eccf841073d56a2cc1ed5d29d3324fc5d5fb1f977a1c76b",
+  "source_revision": "d2158e9a59e58cb41382db0e4dda408a7ee73da7",
+  "source_working_tree_dirty": true,
+  "source_file_sha256": {
+    "__init__.py": "0e770fe4df4dc1c12695ddb762f432c18c6ef75c9d4fb02f00bd89989eaff43b",
+    "audit.py": "35c1fc99a0ff1da12633ed70f043e14e0b78da92136e9ee98ffbe44efc02962b",
+    "benchmark_mapping_allocators.py": "86ecb1b3e64817b5c2901758dcd22e70e545954eaf2835c8885ba87522e6a97f",
+    "configuration.py": "6db72a9eba29892dc597f7f10ed2f31ce7e91ca3afbf8c4d3e8eec98aaeea9f3",
+    "geometry.py": "5ed3f6cb44b48328c08fb0f81c8955c6af5906006e8c5201ee762a920b19bf93",
+    "health.py": "6b0ee3c06f417703adc67b17251805451ede73cc1ff1c50cf5b93565f1d895f6",
+    "integrity.py": "7c43492f099607826210e0f5a8cc9faf18bd45d20ab9c10769c6ac7d7a01f851",
+    "lifecycle.py": "45663e8c90280a9e164f7de2d9924a3353ba910aed66e05425076201ab91309b",
+    "mapping_allocation.py": "51377e8f33c9ba03ac8643d9388d2333227f154784424a3f3d4153a11c294de7",
+    "mapping_allocator.py": "364387b5643856258e5ceca6b1ac7d968d6bcf106e1356fae7bc90ecc43edb3e",
+    "mapping_mission.py": "f5b8699e4c1f2e451eeb493512ad7fb4a35b4ca3c4188b3a52b39233e9664ad2",
+    "mapping_tasks.py": "0c192f04629f484971a970e4e80e4763449bf2e7f9c25dd636f48c29b9ab20b3",
+    "missions.py": "c622500594ee0fc0f5f5d6c6d31df4e0928c195117352467ef9f6699d5b4cb19",
+    "operational.py": "e417b57a08cc84248a7e5629af67f350911e812f7e8d42058f60e03a741a84e2"
+  },
+  "provenance_note": "This run used the recorded working-tree source hashes. After the run, the producer checksum was corrected to hash persisted report bytes on Windows; no mission results or model weights changed.",
+  "environment": {
+    "numpy": "2.4.6",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "python": "3.13.3"
+  },
+  "training": {
+    "coefficients": [
+      1.0021988532330393,
+      0.9943331303812107,
+      0.5023509595417325,
+      -0.01580938263511669
+    ],
+    "examples_per_seed": 40,
+    "feature_schema": "mapping-duration/v1:arrival_seconds,route_seconds,samples_remaining,intercept",
+    "model_type": "ridge-regression",
+    "regularisation": 0.000001,
+    "target": "Exact task ticks under the abstract straight-line movement model",
+    "training_mae_ticks": 0.38067135167990485,
+    "training_seeds": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39,
+      40,
+      41,
+      42,
+      43,
+      44,
+      45,
+      46,
+      47,
+      48,
+      49,
+      50,
+      51,
+      52,
+      53,
+      54,
+      55,
+      56,
+      57,
+      58,
+      59,
+      60,
+      61,
+      62,
+      63
+    ],
+    "validation_mae_ticks": 0.38176947725252736,
+    "validation_seeds": [
+      500,
+      501,
+      502,
+      503,
+      504,
+      505,
+      506,
+      507,
+      508,
+      509,
+      510,
+      511,
+      512,
+      513,
+      514,
+      515
+    ]
+  },
+  "candidate_sha256": "79f7e19dc18cc7db97c9516ac8a922ab46c65f929525311777efa7f556d29533",
+  "held_out_seeds": [
+    9100,
+    9101,
+    9102,
+    9103
+  ],
+  "scenarios": [
+    "nominal",
+    "unit_loss",
+    "comms_loss",
+    "stale_sensor",
+    "coordinator_restart"
+  ],
+  "summary": {
+    "analytic-balanced": {
+      "boundary_violations": 0,
+      "completion_rate": 1,
+      "duplicate_visits": 0,
+      "mean_distance": 339.36635,
+      "mean_ticks": 30.95,
+      "mission_count": 20
+    },
+    "learned-balanced": {
+      "boundary_violations": 0,
+      "completion_rate": 1,
+      "duplicate_visits": 0,
+      "mean_distance": 329.1565,
+      "mean_ticks": 29.4,
+      "mission_count": 20
+    },
+    "nearest-task": {
+      "boundary_violations": 0,
+      "completion_rate": 1,
+      "duplicate_visits": 0,
+      "mean_distance": 327.5562,
+      "mean_ticks": 29.6,
+      "mission_count": 20
+    }
+  },
+  "candidate_clears_local_comparison": true,
+  "deployment_approved": false,
+  "interpretation": "Matched synthetic missions, descriptive metrics only; no automatic release promotion.",
+  "layouts": {
+    "9100": {
+      "columns": 3,
+      "height": 33.77524131483676,
+      "positions": [
+        {
+          "x": 4.136050603928544,
+          "y": 25.484999296853438
+        },
+        {
+          "x": 23.463485328793986,
+          "y": 17.36819400093124
+        },
+        {
+          "x": 40.19801543631727,
+          "y": 12.756694575152064
+        }
+      ],
+      "rows": 3,
+      "seed": 9100,
+      "speeds": [
+        4.312234420912705,
+        7.486846111426217,
+        4.655323194825735
+      ],
+      "width": 41.87733867297417
+    },
+    "9101": {
+      "columns": 2,
+      "height": 25.706639581382884,
+      "positions": [
+        {
+          "x": 82.11385316434618,
+          "y": 5.693918352852077
+        },
+        {
+          "x": 60.100204470603316,
+          "y": 24.88901314688591
+        },
+        {
+          "x": 28.10614605166284,
+          "y": 3.7564454714137145
+        }
+      ],
+      "rows": 2,
+      "seed": 9101,
+      "speeds": [
+        10.906021331460629,
+        4.181640952823038,
+        10.740380062662878
+      ],
+      "width": 88.30269319555163
+    },
+    "9102": {
+      "columns": 4,
+      "height": 31.150064672702754,
+      "positions": [
+        {
+          "x": 8.433570222093,
+          "y": 20.583202192140003
+        },
+        {
+          "x": 23.42210245238276,
+          "y": 6.084846924943045
+        },
+        {
+          "x": 83.84599258056332,
+          "y": 29.770061333297953
+        }
+      ],
+      "rows": 2,
+      "seed": 9102,
+      "speeds": [
+        8.857948612422096,
+        4.879759894587581,
+        10.986374418884935
+      ],
+      "width": 88.28675771397931
+    },
+    "9103": {
+      "columns": 3,
+      "height": 56.32647451914025,
+      "positions": [
+        {
+          "x": 76.42083959661497,
+          "y": 20.372942110955186
+        },
+        {
+          "x": 14.324240219373866,
+          "y": 5.597071830716013
+        },
+        {
+          "x": 38.073903996125885,
+          "y": 36.23821480774397
+        }
+      ],
+      "rows": 2,
+      "seed": 9103,
+      "speeds": [
+        7.2874669127195055,
+        4.6164838218457485,
+        4.436526612048738
+      ],
+      "width": 82.19085784720511
+    }
+  },
+  "missions": [
+    {
+      "allocator": "nearest-task",
+      "boundary_violations": 0,
+      "result": {
+        "command_count": 67,
+        "completed": true,
+        "completed_tasks": 9,
+        "distance_travelled": 295.466,
+        "duplicate_visits": 0,
+        "expired_assignments": 0,
+        "recovery_delay_seconds": null,
+        "rejected_intents": 0,
+        "scenario": "nominal",
+        "stale_assignment_rejections": 0,
+        "ticks": 27,
+        "total_samples": 36,
+        "total_tasks": 9,
+        "visited_samples": 36
+      },
+      "scenario": "nominal",
+      "seed": 9100
+    },
+    {
+      "allocator": "analytic-balanced",
+      "boundary_violations": 0,
+      "result": {
+        "command_count": 69,
+        "completed": true,
+        "completed_tasks": 9,
+        "distance_travelled": 303.692,
+        "duplicate_visits": 0,
+        "expired_assignments": 0,
+        "recovery_delay_seconds": null,
+        "rejected_intents": 0,
+        "scenario": "nominal",
+        "stale_assignment_rejections": 0,
+        "ticks": 31,
+        "total_samples": 36,
+        "total_tasks": 9,
+        "visited_samples": 36
+      },
+      "scenario": "nominal",
+      "seed": 9100
+    },
+    {
+      "allocator": "learned-balanced",
+      "boundary_violations": 0,
+      "result": {
+        "command_count": 67,
+        "completed": true,
+        "completed_tasks": 9,
+        "distance_travelled": 292.195,
+        "duplicate_visits": 0,
+        "expired_assignments": 0,
+        "recovery_delay_seconds": null,
+        "rejected_intents": 0,
+        "scenario": "nominal",
+        "stale_assignment_rejections": 0,
+        "ticks": 29,
+        "total_samples": 36,
+        "total_tasks": 9,
+        "visited_samples": 36
+      },
+      "scenario": "nominal",
+      "seed": 9100
+    },
+    {
+      "allocator": "nearest-task",
+      "boundary_violations": 0,
+      "result": {
+        "command_count": 61,
+        "completed": true,
+        "completed_tasks": 9,
+        "distance_travelled": 287.236,
+        "duplicate_visits": 0,
+        "expired_assignments": 1,
+        "recovery_delay_seconds": 6,
+        "rejected_intents": 0,
+        "scenario": "unit_loss",
+        "stale_assignment_rejections": 0,
+        "ticks": 30,
+        "total_samples": 36,
+        "total_tasks": 9,
+        "visited_samples": 36
+      },
+      "scenario": "unit_loss",
+      "seed": 9100
+    },
+    {
+      "allocator": "analytic-balanced",
+      "boundary_violations": 0,
+      "result": {
+        "command_count": 62,
+        "completed": true,
+        "completed_tasks": 9,
+        "distance_travelled": 303.936,
+        "duplicate_visits": 0,
+        "expired_assignments": 1,
+        "recovery_delay_seconds": 6,
+        "rejected_intents": 0,
+        "scenario": "unit_loss",
+        "stale_assignment_rejections": 0,
+        "ticks": 31,
+        "total_samples": 36,
+        "total_tasks": 9,
+        "visited_samples": 36
+      },
+      "scenario": "unit_loss",
+      "seed": 9100
+    },
+    {
+      "allocator": "learned-balanced",
+      "boundary_violations": 0,
+      "result": {
+        "command_count": 61,
+        "completed": true,
+        "completed_tasks": 9,
+        "distance_travelled": 287.236,
+        "duplicate_visits": 0,
+        "expired_assignments": 1,
+        "recovery_delay_seconds": 6,
+        "rejected_intents": 0,
+        "scenario": "unit_loss",
+        "stale_assignment_rejections": 0,
+        "ticks": 30,
+        "total_samples": 36,
+        "total_tasks": 9,
+        "visited_samples": 36
+      },
+      "scenario": "unit_loss",
+      "seed": 9100
+    },
+    {
+      "allocator": "nearest-task",
+      "boundary_violations": 0,
+      "result": {
+        "command_count": 70,
+        "completed": true,
+        "completed_tasks": 9,
+        "distance_travelled": 307.059,
+        "duplicate_visits": 0,
+        "expired_assignments": 1,
+        "recovery_delay_seconds": 6,
+        "rejected_intents": 0,
+        "scenario": "comms_loss",
+        "stale_assignment_rejections": 1,
+        "ticks": 31,
+        "total_samples": 36,
+        "total_tasks": 9,
+        "visited_samples": 36
+      },
+      "scenario": "comms_loss",
+      "seed": 9100
+    },
+    {
+      "allocator": "analytic-balanced",
+      "boundary_violations": 0,
+      "result": {
+        "command_count": 69,
+        "completed": true,
+        "completed_tasks": 9,
+        "distance_travelled": 304.076,
+        "duplicate_visits": 0,
+        "expired_assignments": 1,
+        "recovery_delay_seconds": 6,
+        "rejected_intents": 0,
+        "scenario": "comms_loss",
+        "stale_assignment_rejections": 1,
+        "ticks": 29,
+        "total_samples": 36,
+        "total_tasks": 9,
+        "visited_samples": 36
+      },
+      "scenario": "comms_loss",
+      "seed": 9100
+    },
+    {
+      "allocator": "learned-balanced",
+      "boundary_violations": 0,
+      "result": {
+        "command_count": 69,
+        "completed": true,
+        "completed_tasks": 9,
+        "distance_travelled": 304.076,
+        "duplicate_visits": 0,
+        "expired_assignments": 1,
+        "recovery_delay_seconds": 6,
+        "rejected_intents": 0,
+        "scenario": "comms_loss",
+        "stale_assignment_rejections": 1,
+        "ticks": 29,
+        "total_samples": 36,
+        "total_tasks": 9,
+        "visited_samples": 36
+      },
+      "scenario": "comms_loss",
+      "seed": 9100
+    },
+    {
+      "allocator": "nearest-task",
+      "boundary_violations": 0,
+      "result": {
+        "command_count": 70,
+        "completed": true,
+        "completed_tasks": 9,
+        "distance_travelled": 307.059,
+        "duplicate_visits": 0,
+        "expired_assignments": 0,
+        "recovery_delay_seconds": null,
+        "rejected_intents": 5,
+        "scenario": "stale_sensor",
+        "stale_assignment_rejections": 0,
+        "ticks": 31,
+        "total_samples": 36,
+        "total_tasks": 9,
+        "visited_samples": 36
+      },
+      "scenario": "stale_sensor",
+      "seed": 9100
+    },
+    {
+      "allocator": "analytic-balanced",
+      "boundary_violations": 0,
+      "result": {
+        "command_count": 69,
+        "completed": true,
+        "completed_tasks": 9,
+        "distance_travelled": 304.076,
+        "duplicate_visits": 0,
+        "expired_assignments": 0,
+        "recovery_delay_seconds": null,
+        "rejected_intents": 5,
+        "scenario": "stale_sensor",
+        "stale_assignment_rejections": 0,
+        "ticks": 29,
+        "total_samples": 36,
+        "total_tasks": 9,
+        "visited_samples": 36
+      },
+      "scenario": "stale_sensor",
+      "seed": 9100
+    },
+    {
+      "allocator": "learned-balanced",
+      "boundary_violations": 0,
+      "result": {
+        "command_count": 69,
+        "completed": true,
+        "completed_tasks": 9,
+        "distance_travelled": 304.076,
+        "duplicate_visits": 0,
+        "expired_assignments": 0,
+        "recovery_delay_seconds": null,
+        "rejected_intents": 5,
+        "scenario": "stale_sensor",
+        "stale_assignment_rejections": 0,
+        "ticks": 29,
+        "total_samples": 36,
+        "total_tasks": 9,
+        "visited_samples": 36
+      },
+      "scenario": "stale_sensor",
+      "seed": 9100
+    },
+    {
+      "allocator": "nearest-task",
+      "boundary_violations": 0,
+      "result": {
+        "command_count": 67,
+        "completed": true,
+        "completed_tasks": 9,
+        "distance_travelled": 295.466,
+        "duplicate_visits": 0,
+        "expired_assignments": 0,
+        "recovery_delay_seconds": null,
+        "rejected_intents": 0,
+        "scenario": "coordinator_restart",
+        "stale_assignment_rejections": 0,
+        "ticks": 27,
+        "total_samples": 36,
+        "total_tasks": 9,
+        "visited_samples": 36
+      },
+      "scenario": "coordinator_restart",
+      "seed": 9100
+    },
+    {
+      "allocator": "analytic-balanced",
+      "boundary_violations": 0,
+      "result": {
+        "command_count": 69,
+        "completed": true,
+        "completed_tasks": 9,
+        "distance_travelled": 303.692,
+        "duplicate_visits": 0,
+        "expired_assignments": 0,
+        "recovery_delay_seconds": null,
+        "rejected_intents": 0,
+        "scenario": "coordinator_restart",
+        "stale_assignment_rejections": 0,
+        "ticks": 31,
+        "total_samples": 36,
+        "total_tasks": 9,
+        "visited_samples": 36
+      },
+      "scenario": "coordinator_restart",
+      "seed": 9100
+    },
+    {
+      "allocator": "learned-balanced",
+      "boundary_violations": 0,
+      "result": {
+        "command_count": 67,
+        "completed": true,
+        "completed_tasks": 9,
+        "distance_travelled": 292.195,
+        "duplicate_visits": 0,
+        "expired_assignments": 0,
+        "recovery_delay_seconds": null,
+        "rejected_intents": 0,
+        "scenario": "coordinator_restart",
+        "stale_assignment_rejections": 0,
+        "ticks": 29,
+        "total_samples": 36,
+        "total_tasks": 9,
+        "visited_samples": 36
+      },
+      "scenario": "coordinator_restart",
+      "seed": 9100
+    },
+    {
+      "allocator": "nearest-task",
+      "boundary_violations": 0,
+      "result": {
+        "command_count": 44,
+        "completed": true,
+        "completed_tasks": 4,
+        "distance_travelled": 262.951,
+        "duplicate_visits": 0,
+        "expired_assignments": 0,
+        "recovery_delay_seconds": null,
+        "rejected_intents": 0,
+        "scenario": "nominal",
+        "stale_assignment_rejections": 0,
+        "ticks": 17,
+        "total_samples": 16,
+        "total_tasks": 4,
+        "visited_samples": 16
+      },
+      "scenario": "nominal",
+      "seed": 9101
+    },
+    {
+      "allocator": "analytic-balanced",
+      "boundary_violations": 0,
+      "result": {
+        "command_count": 45,
+        "completed": true,
+        "completed_tasks": 4,
+        "distance_travelled": 279.772,
+        "duplicate_visits": 0,
+        "expired_assignments": 0,
+        "recovery_delay_seconds": null,
+        "rejected_intents": 0,
+        "scenario": "nominal",
+        "stale_assignment_rejections": 0,
+        "ticks": 18,
+        "total_samples": 16,
+        "total_tasks": 4,
+        "visited_samples": 16
+      },
+      "scenario": "nominal",
+      "seed": 9101
+    },
+    {
+      "allocator": "learned-balanced",
+      "boundary_violations": 0,
+      "result": {
+        "command_count": 44,
+        "completed": true,
+        "completed_tasks": 4,
+        "distance_travelled": 262.951,
+        "duplicate_visits": 0,
+        "expired_assignments": 0,
+        "recovery_delay_seconds": null,
+        "rejected_intents": 0,
+        "scenario": "nominal",
+        "stale_assignment_rejections": 0,
+        "ticks": 17,
+        "total_samples": 16,
+        "total_tasks": 4,
+        "visited_samples": 16
+      },
+      "scenario": "nominal",
+      "seed": 9101
+    },
+    {
+      "allocator": "nearest-task",
+      "boundary_violations": 0,
+      "result": {
+        "command_count": 55,
+        "completed": true,
+        "completed_tasks": 4,
+        "distance_travelled": 277.005,
+        "duplicate_visits": 0,
+        "expired_assignments": 1,
+        "recovery_delay_seconds": 15,
+        "rejected_intents": 0,
+        "scenario": "unit_loss",
+        "stale_assignment_rejections": 0,
+        "ticks": 36,
+        "total_samples": 16,
+        "total_tasks": 4,
+        "visited_samples": 16
+      },
+      "scenario": "unit_loss",
+      "seed": 9101
+    },
+    {
+      "allocator": "analytic-balanced",
+      "boundary_violations": 0,
+      "result": {
+        "command_count": 56,
+        "completed": true,
+        "completed_tasks": 4,
+        "distance_travelled": 293.826,
+        "duplicate_visits": 0,
+        "expired_assignments": 1,
+        "recovery_delay_seconds": 15,
+        "rejected_intents": 0,
+        "scenario": "unit_loss",
+        "stale_assignment_rejections": 0,
+        "ticks": 36,
+        "total_samples": 16,
+        "total_tasks": 4,
+        "visited_samples": 16
+      },
+      "scenario": "unit_loss",
+      "seed": 9101
+    },
+    {
+      "allocator": "learned-balanced",
+      "boundary_violations": 0,
+      "result": {
+        "command_count": 48,
+        "completed": true,
+        "completed_tasks": 4,
+        "distance_travelled": 305.902,
+        "duplicate_visits": 0,
+        "expired_assignments": 1,
+        "recovery_delay_seconds": 15,
+        "rejected_intents": 0,
+        "scenario": "unit_loss",
+        "stale_assignment_rejections": 0,
+        "ticks": 29,
+        "total_samples": 16,
+        "total_tasks": 4,
+        "visited_samples": 16
+      },
+      "scenario": "unit_loss",
+      "seed": 9101
+    },
+    {
+      "allocator": "nearest-task",
+      "boundary_violations": 0,
+      "result": {
+        "command_count": 44,
+        "completed": true,
+        "completed_tasks": 4,
+        "distance_travelled": 262.951,
+        "duplicate_visits": 0,
+        "expired_assignments": 1,
+        "recovery_delay_seconds": 6,
+        "rejected_intents": 0,
+        "scenario": "comms_loss",
+        "stale_assignment_rejections": 1,
+        "ticks": 17,
+        "total_samples": 16,
+        "total_tasks": 4,
+        "visited_samples": 16
+      },
+      "scenario": "comms_loss",
+      "seed": 9101
+    },
+    {
+      "allocator": "analytic-balanced",
+      "boundary_violations": 0,
+      "result": {
+        "command_count": 45,
+        "completed": true,
+        "completed_tasks": 4,
+        "distance_travelled": 279.772,
+        "duplicate_visits": 0,
+        "expired_assignments": 1,
+        "recovery_delay_seconds": 6,
+        "rejected_intents": 0,
+        "scenario": "comms_loss",
+        "stale_assignment_rejections": 1,
+        "ticks": 18,
+        "total_samples": 16,
+        "total_tasks": 4,
+        "visited_samples": 16
+      },
+      "scenario": "comms_loss",
+      "seed": 9101
+    },
+    {
+      "allocator": "learned-balanced",
+      "boundary_violations": 0,
+      "result": {
+        "command_count": 44,
+        "completed": true,
+        "completed_tasks": 4,
+        "distance_travelled": 262.951,
+        "duplicate_visits": 0,
+        "expired_assignments": 1,
+        "recovery_delay_seconds": 6,
+        "rejected_intents": 0,
+        "scenario": "comms_loss",
+        "stale_assignment_rejections": 1,
+        "ticks": 17,
+        "total_samples": 16,
+        "total_tasks": 4,
+        "visited_samples": 16
+      },
+      "scenario": "comms_loss",
+      "seed": 9101
+    },
+    {
+      "allocator": "nearest-task",
+      "boundary_violations": 0,
+      "result": {
+        "command_count": 44,
+        "completed": true,
+        "completed_tasks": 4,
+        "distance_travelled": 262.951,
+        "duplicate_visits": 0,
+        "expired_assignments": 0,
+        "recovery_delay_seconds": null,
+        "rejected_intents": 5,
+        "scenario": "stale_sensor",
+        "stale_assignment_rejections": 0,
+        "ticks": 17,
+        "total_samples": 16,
+        "total_tasks": 4,
+        "visited_samples": 16
+      },
+      "scenario": "stale_sensor",
+      "seed": 9101
+    },
+    {
+      "allocator": "analytic-balanced",
+      "boundary_violations": 0,
+      "result": {
+        "command_count": 45,
+        "completed": true,
+        "completed_tasks": 4,
+        "distance_travelled": 279.772,
+        "duplicate_visits": 0,
+        "expired_assignments": 0,
+        "recovery_delay_seconds": null,
+        "rejected_intents": 5,
+        "scenario": "stale_sensor",
+        "stale_assignment_rejections": 0,
+        "ticks": 18,
+        "total_samples": 16,
+        "total_tasks": 4,
+        "visited_samples": 16
+      },
+      "scenario": "stale_sensor",
+      "seed": 9101
+    },
+    {
+      "allocator": "learned-balanced",
+      "boundary_violations": 0,
+      "result": {
+        "command_count": 44,
+        "completed": true,
+        "completed_tasks": 4,
+        "distance_travelled": 262.951,
+        "duplicate_visits": 0,
+        "expired_assignments": 0,
+        "recovery_delay_seconds": null,
+        "rejected_intents": 5,
+        "scenario": "stale_sensor",
+        "stale_assignment_rejections": 0,
+        "ticks": 17,
+        "total_samples": 16,
+        "total_tasks": 4,
+        "visited_samples": 16
+      },
+      "scenario": "stale_sensor",
+      "seed": 9101
+    },
+    {
+      "allocator": "nearest-task",
+      "boundary_violations": 0,
+      "result": {
+        "command_count": 44,
+        "completed": true,
+        "completed_tasks": 4,
+        "distance_travelled": 262.951,
+        "duplicate_visits": 0,
+        "expired_assignments": 0,
+        "recovery_delay_seconds": null,
+        "rejected_intents": 0,
+        "scenario": "coordinator_restart",
+        "stale_assignment_rejections": 0,
+        "ticks": 17,
+        "total_samples": 16,
+        "total_tasks": 4,
+        "visited_samples": 16
+      },
+      "scenario": "coordinator_restart",
+      "seed": 9101
+    },
+    {
+      "allocator": "analytic-balanced",
+      "boundary_violations": 0,
+      "result": {
+        "command_count": 45,
+        "completed": true,
+        "completed_tasks": 4,
+        "distance_travelled": 279.772,
+        "duplicate_visits": 0,
+        "expired_assignments": 0,
+        "recovery_delay_seconds": null,
+        "rejected_intents": 0,
+        "scenario": "coordinator_restart",
+        "stale_assignment_rejections": 0,
+        "ticks": 18,
+        "total_samples": 16,
+        "total_tasks": 4,
+        "visited_samples": 16
+      },
+      "scenario": "coordinator_restart",
+      "seed": 9101
+    },
+    {
+      "allocator": "learned-balanced",
+      "boundary_violations": 0,
+      "result": {
+        "command_count": 44,
+        "completed": true,
+        "completed_tasks": 4,
+        "distance_travelled": 262.951,
+        "duplicate_visits": 0,
+        "expired_assignments": 0,
+        "recovery_delay_seconds": null,
+        "rejected_intents": 0,
+        "scenario": "coordinator_restart",
+        "stale_assignment_rejections": 0,
+        "ticks": 17,
+        "total_samples": 16,
+        "total_tasks": 4,
+        "visited_samples": 16
+      },
+      "scenario": "coordinator_restart",
+      "seed": 9101
+    },
+    {
+      "allocator": "nearest-task",
+      "boundary_violations": 0,
+      "result": {
+        "command_count": 67,
+        "completed": true,
+        "completed_tasks": 8,
+        "distance_travelled": 385.347,
+        "duplicate_visits": 0,
+        "expired_assignments": 0,
+        "recovery_delay_seconds": null,
+        "rejected_intents": 0,
+        "scenario": "nominal",
+        "stale_assignment_rejections": 0,
+        "ticks": 25,
+        "total_samples": 32,
+        "total_tasks": 8,
+        "visited_samples": 32
+      },
+      "scenario": "nominal",
+      "seed": 9102
+    },
+    {
+      "allocator": "analytic-balanced",
+      "boundary_violations": 0,
+      "result": {
+        "command_count": 67,
+        "completed": true,
+        "completed_tasks": 8,
+        "distance_travelled": 394.125,
+        "duplicate_visits": 0,
+        "expired_assignments": 0,
+        "recovery_delay_seconds": null,
+        "rejected_intents": 0,
+        "scenario": "nominal",
+        "stale_assignment_rejections": 0,
+        "ticks": 25,
+        "total_samples": 32,
+        "total_tasks": 8,
+        "visited_samples": 32
+      },
+      "scenario": "nominal",
+      "seed": 9102
+    },
+    {
+      "allocator": "learned-balanced",
+      "boundary_violations": 0,
+      "result": {
+        "command_count": 67,
+        "completed": true,
+        "completed_tasks": 8,
+        "distance_travelled": 385.347,
+        "duplicate_visits": 0,
+        "expired_assignments": 0,
+        "recovery_delay_seconds": null,
+        "rejected_intents": 0,
+        "scenario": "nominal",
+        "stale_assignment_rejections": 0,
+        "ticks": 25,
+        "total_samples": 32,
+        "total_tasks": 8,
+        "visited_samples": 32
+      },
+      "scenario": "nominal",
+      "seed": 9102
+    },
+    {
+      "allocator": "nearest-task",
+      "boundary_violations": 0,
+      "result": {
+        "command_count": 73,
+        "completed": true,
+        "completed_tasks": 8,
+        "distance_travelled": 375.214,
+        "duplicate_visits": 0,
+        "expired_assignments": 1,
+        "recovery_delay_seconds": 17,
+        "rejected_intents": 0,
+        "scenario": "unit_loss",
+        "stale_assignment_rejections": 0,
+        "ticks": 40,
+        "total_samples": 32,
+        "total_tasks": 8,
+        "visited_samples": 32
+      },
+      "scenario": "unit_loss",
+      "seed": 9102
+    },
+    {
+      "allocator": "analytic-balanced",
+      "boundary_violations": 0,
+      "result": {
+        "command_count": 85,
+        "completed": true,
+        "completed_tasks": 8,
+        "distance_travelled": 442.918,
+        "duplicate_visits": 0,
+        "expired_assignments": 1,
+        "recovery_delay_seconds": 7,
+        "rejected_intents": 0,
+        "scenario": "unit_loss",
+        "stale_assignment_rejections": 0,
+        "ticks": 52,
+        "total_samples": 32,
+        "total_tasks": 8,
+        "visited_samples": 32
+      },
+      "scenario": "unit_loss",
+      "seed": 9102
+    },
+    {
+      "allocator": "learned-balanced",
+      "boundary_violations": 0,
+      "result": {
+        "command_count": 76,
+        "completed": true,
+        "completed_tasks": 8,
+        "distance_travelled": 390.831,
+        "duplicate_visits": 0,
+        "expired_assignments": 1,
+        "recovery_delay_seconds": 7,
+        "rejected_intents": 0,
+        "scenario": "unit_loss",
+        "stale_assignment_rejections": 0,
+        "ticks": 43,
+        "total_samples": 32,
+        "total_tasks": 8,
+        "visited_samples": 32
+      },
+      "scenario": "unit_loss",
+      "seed": 9102
+    },
+    {
+      "allocator": "nearest-task",
+      "boundary_violations": 0,
+      "result": {
+        "command_count": 71,
+        "completed": true,
+        "completed_tasks": 8,
+        "distance_travelled": 372.662,
+        "duplicate_visits": 0,
+        "expired_assignments": 1,
+        "recovery_delay_seconds": 6,
+        "rejected_intents": 0,
+        "scenario": "comms_loss",
+        "stale_assignment_rejections": 1,
+        "ticks": 34,
+        "total_samples": 32,
+        "total_tasks": 8,
+        "visited_samples": 32
+      },
+      "scenario": "comms_loss",
+      "seed": 9102
+    },
+    {
+      "allocator": "analytic-balanced",
+      "boundary_violations": 0,
+      "result": {
+        "command_count": 75,
+        "completed": true,
+        "completed_tasks": 8,
+        "distance_travelled": 390.467,
+        "duplicate_visits": 0,
+        "expired_assignments": 1,
+        "recovery_delay_seconds": 6,
+        "rejected_intents": 0,
+        "scenario": "comms_loss",
+        "stale_assignment_rejections": 1,
+        "ticks": 38,
+        "total_samples": 32,
+        "total_tasks": 8,
+        "visited_samples": 32
+      },
+      "scenario": "comms_loss",
+      "seed": 9102
+    },
+    {
+      "allocator": "learned-balanced",
+      "boundary_violations": 0,
+      "result": {
+        "command_count": 71,
+        "completed": true,
+        "completed_tasks": 8,
+        "distance_travelled": 372.662,
+        "duplicate_visits": 0,
+        "expired_assignments": 1,
+        "recovery_delay_seconds": 6,
+        "rejected_intents": 0,
+        "scenario": "comms_loss",
+        "stale_assignment_rejections": 1,
+        "ticks": 34,
+        "total_samples": 32,
+        "total_tasks": 8,
+        "visited_samples": 32
+      },
+      "scenario": "comms_loss",
+      "seed": 9102
+    },
+    {
+      "allocator": "nearest-task",
+      "boundary_violations": 0,
+      "result": {
+        "command_count": 67,
+        "completed": true,
+        "completed_tasks": 8,
+        "distance_travelled": 385.347,
+        "duplicate_visits": 0,
+        "expired_assignments": 0,
+        "recovery_delay_seconds": null,
+        "rejected_intents": 5,
+        "scenario": "stale_sensor",
+        "stale_assignment_rejections": 0,
+        "ticks": 30,
+        "total_samples": 32,
+        "total_tasks": 8,
+        "visited_samples": 32
+      },
+      "scenario": "stale_sensor",
+      "seed": 9102
+    },
+    {
+      "allocator": "analytic-balanced",
+      "boundary_violations": 0,
+      "result": {
+        "command_count": 69,
+        "completed": true,
+        "completed_tasks": 8,
+        "distance_travelled": 407.194,
+        "duplicate_visits": 0,
+        "expired_assignments": 0,
+        "recovery_delay_seconds": null,
+        "rejected_intents": 5,
+        "scenario": "stale_sensor",
+        "stale_assignment_rejections": 0,
+        "ticks": 32,
+        "total_samples": 32,
+        "total_tasks": 8,
+        "visited_samples": 32
+      },
+      "scenario": "stale_sensor",
+      "seed": 9102
+    },
+    {
+      "allocator": "learned-balanced",
+      "boundary_violations": 0,
+      "result": {
+        "command_count": 67,
+        "completed": true,
+        "completed_tasks": 8,
+        "distance_travelled": 385.347,
+        "duplicate_visits": 0,
+        "expired_assignments": 0,
+        "recovery_delay_seconds": null,
+        "rejected_intents": 5,
+        "scenario": "stale_sensor",
+        "stale_assignment_rejections": 0,
+        "ticks": 30,
+        "total_samples": 32,
+        "total_tasks": 8,
+        "visited_samples": 32
+      },
+      "scenario": "stale_sensor",
+      "seed": 9102
+    },
+    {
+      "allocator": "nearest-task",
+      "boundary_violations": 0,
+      "result": {
+        "command_count": 67,
+        "completed": true,
+        "completed_tasks": 8,
+        "distance_travelled": 385.347,
+        "duplicate_visits": 0,
+        "expired_assignments": 0,
+        "recovery_delay_seconds": null,
+        "rejected_intents": 0,
+        "scenario": "coordinator_restart",
+        "stale_assignment_rejections": 0,
+        "ticks": 25,
+        "total_samples": 32,
+        "total_tasks": 8,
+        "visited_samples": 32
+      },
+      "scenario": "coordinator_restart",
+      "seed": 9102
+    },
+    {
+      "allocator": "analytic-balanced",
+      "boundary_violations": 0,
+      "result": {
+        "command_count": 67,
+        "completed": true,
+        "completed_tasks": 8,
+        "distance_travelled": 394.125,
+        "duplicate_visits": 0,
+        "expired_assignments": 0,
+        "recovery_delay_seconds": null,
+        "rejected_intents": 0,
+        "scenario": "coordinator_restart",
+        "stale_assignment_rejections": 0,
+        "ticks": 25,
+        "total_samples": 32,
+        "total_tasks": 8,
+        "visited_samples": 32
+      },
+      "scenario": "coordinator_restart",
+      "seed": 9102
+    },
+    {
+      "allocator": "learned-balanced",
+      "boundary_violations": 0,
+      "result": {
+        "command_count": 67,
+        "completed": true,
+        "completed_tasks": 8,
+        "distance_travelled": 385.347,
+        "duplicate_visits": 0,
+        "expired_assignments": 0,
+        "recovery_delay_seconds": null,
+        "rejected_intents": 0,
+        "scenario": "coordinator_restart",
+        "stale_assignment_rejections": 0,
+        "ticks": 25,
+        "total_samples": 32,
+        "total_tasks": 8,
+        "visited_samples": 32
+      },
+      "scenario": "coordinator_restart",
+      "seed": 9102
+    },
+    {
+      "allocator": "nearest-task",
+      "boundary_violations": 0,
+      "result": {
+        "command_count": 78,
+        "completed": true,
+        "completed_tasks": 6,
+        "distance_travelled": 350.761,
+        "duplicate_visits": 0,
+        "expired_assignments": 0,
+        "recovery_delay_seconds": null,
+        "rejected_intents": 0,
+        "scenario": "nominal",
+        "stale_assignment_rejections": 0,
+        "ticks": 35,
+        "total_samples": 24,
+        "total_tasks": 6,
+        "visited_samples": 24
+      },
+      "scenario": "nominal",
+      "seed": 9103
+    },
+    {
+      "allocator": "analytic-balanced",
+      "boundary_violations": 0,
+      "result": {
+        "command_count": 78,
+        "completed": true,
+        "completed_tasks": 6,
+        "distance_travelled": 350.761,
+        "duplicate_visits": 0,
+        "expired_assignments": 0,
+        "recovery_delay_seconds": null,
+        "rejected_intents": 0,
+        "scenario": "nominal",
+        "stale_assignment_rejections": 0,
+        "ticks": 35,
+        "total_samples": 24,
+        "total_tasks": 6,
+        "visited_samples": 24
+      },
+      "scenario": "nominal",
+      "seed": 9103
+    },
+    {
+      "allocator": "learned-balanced",
+      "boundary_violations": 0,
+      "result": {
+        "command_count": 78,
+        "completed": true,
+        "completed_tasks": 6,
+        "distance_travelled": 350.761,
+        "duplicate_visits": 0,
+        "expired_assignments": 0,
+        "recovery_delay_seconds": null,
+        "rejected_intents": 0,
+        "scenario": "nominal",
+        "stale_assignment_rejections": 0,
+        "ticks": 35,
+        "total_samples": 24,
+        "total_tasks": 6,
+        "visited_samples": 24
+      },
+      "scenario": "nominal",
+      "seed": 9103
+    },
+    {
+      "allocator": "nearest-task",
+      "boundary_violations": 0,
+      "result": {
+        "command_count": 103,
+        "completed": true,
+        "completed_tasks": 6,
+        "distance_travelled": 412.506,
+        "duplicate_visits": 0,
+        "expired_assignments": 1,
+        "recovery_delay_seconds": 30,
+        "rejected_intents": 0,
+        "scenario": "unit_loss",
+        "stale_assignment_rejections": 0,
+        "ticks": 54,
+        "total_samples": 24,
+        "total_tasks": 6,
+        "visited_samples": 24
+      },
+      "scenario": "unit_loss",
+      "seed": 9103
+    },
+    {
+      "allocator": "analytic-balanced",
+      "boundary_violations": 0,
+      "result": {
+        "command_count": 103,
+        "completed": true,
+        "completed_tasks": 6,
+        "distance_travelled": 412.506,
+        "duplicate_visits": 0,
+        "expired_assignments": 1,
+        "recovery_delay_seconds": 30,
+        "rejected_intents": 0,
+        "scenario": "unit_loss",
+        "stale_assignment_rejections": 0,
+        "ticks": 54,
+        "total_samples": 24,
+        "total_tasks": 6,
+        "visited_samples": 24
+      },
+      "scenario": "unit_loss",
+      "seed": 9103
+    },
+    {
+      "allocator": "learned-balanced",
+      "boundary_violations": 0,
+      "result": {
+        "command_count": 103,
+        "completed": true,
+        "completed_tasks": 6,
+        "distance_travelled": 412.506,
+        "duplicate_visits": 0,
+        "expired_assignments": 1,
+        "recovery_delay_seconds": 30,
+        "rejected_intents": 0,
+        "scenario": "unit_loss",
+        "stale_assignment_rejections": 0,
+        "ticks": 54,
+        "total_samples": 24,
+        "total_tasks": 6,
+        "visited_samples": 24
+      },
+      "scenario": "unit_loss",
+      "seed": 9103
+    },
+    {
+      "allocator": "nearest-task",
+      "boundary_violations": 0,
+      "result": {
+        "command_count": 78,
+        "completed": true,
+        "completed_tasks": 6,
+        "distance_travelled": 356.042,
+        "duplicate_visits": 0,
+        "expired_assignments": 1,
+        "recovery_delay_seconds": 6,
+        "rejected_intents": 0,
+        "scenario": "comms_loss",
+        "stale_assignment_rejections": 1,
+        "ticks": 32,
+        "total_samples": 24,
+        "total_tasks": 6,
+        "visited_samples": 24
+      },
+      "scenario": "comms_loss",
+      "seed": 9103
+    },
+    {
+      "allocator": "analytic-balanced",
+      "boundary_violations": 0,
+      "result": {
+        "command_count": 78,
+        "completed": true,
+        "completed_tasks": 6,
+        "distance_travelled": 356.042,
+        "duplicate_visits": 0,
+        "expired_assignments": 1,
+        "recovery_delay_seconds": 6,
+        "rejected_intents": 0,
+        "scenario": "comms_loss",
+        "stale_assignment_rejections": 1,
+        "ticks": 32,
+        "total_samples": 24,
+        "total_tasks": 6,
+        "visited_samples": 24
+      },
+      "scenario": "comms_loss",
+      "seed": 9103
+    },
+    {
+      "allocator": "learned-balanced",
+      "boundary_violations": 0,
+      "result": {
+        "command_count": 78,
+        "completed": true,
+        "completed_tasks": 6,
+        "distance_travelled": 356.042,
+        "duplicate_visits": 0,
+        "expired_assignments": 1,
+        "recovery_delay_seconds": 6,
+        "rejected_intents": 0,
+        "scenario": "comms_loss",
+        "stale_assignment_rejections": 1,
+        "ticks": 32,
+        "total_samples": 24,
+        "total_tasks": 6,
+        "visited_samples": 24
+      },
+      "scenario": "comms_loss",
+      "seed": 9103
+    },
+    {
+      "allocator": "nearest-task",
+      "boundary_violations": 0,
+      "result": {
+        "command_count": 78,
+        "completed": true,
+        "completed_tasks": 6,
+        "distance_travelled": 356.042,
+        "duplicate_visits": 0,
+        "expired_assignments": 0,
+        "recovery_delay_seconds": null,
+        "rejected_intents": 5,
+        "scenario": "stale_sensor",
+        "stale_assignment_rejections": 0,
+        "ticks": 32,
+        "total_samples": 24,
+        "total_tasks": 6,
+        "visited_samples": 24
+      },
+      "scenario": "stale_sensor",
+      "seed": 9103
+    },
+    {
+      "allocator": "analytic-balanced",
+      "boundary_violations": 0,
+      "result": {
+        "command_count": 78,
+        "completed": true,
+        "completed_tasks": 6,
+        "distance_travelled": 356.042,
+        "duplicate_visits": 0,
+        "expired_assignments": 0,
+        "recovery_delay_seconds": null,
+        "rejected_intents": 5,
+        "scenario": "stale_sensor",
+        "stale_assignment_rejections": 0,
+        "ticks": 32,
+        "total_samples": 24,
+        "total_tasks": 6,
+        "visited_samples": 24
+      },
+      "scenario": "stale_sensor",
+      "seed": 9103
+    },
+    {
+      "allocator": "learned-balanced",
+      "boundary_violations": 0,
+      "result": {
+        "command_count": 78,
+        "completed": true,
+        "completed_tasks": 6,
+        "distance_travelled": 356.042,
+        "duplicate_visits": 0,
+        "expired_assignments": 0,
+        "recovery_delay_seconds": null,
+        "rejected_intents": 5,
+        "scenario": "stale_sensor",
+        "stale_assignment_rejections": 0,
+        "ticks": 32,
+        "total_samples": 24,
+        "total_tasks": 6,
+        "visited_samples": 24
+      },
+      "scenario": "stale_sensor",
+      "seed": 9103
+    },
+    {
+      "allocator": "nearest-task",
+      "boundary_violations": 0,
+      "result": {
+        "command_count": 78,
+        "completed": true,
+        "completed_tasks": 6,
+        "distance_travelled": 350.761,
+        "duplicate_visits": 0,
+        "expired_assignments": 0,
+        "recovery_delay_seconds": null,
+        "rejected_intents": 0,
+        "scenario": "coordinator_restart",
+        "stale_assignment_rejections": 0,
+        "ticks": 35,
+        "total_samples": 24,
+        "total_tasks": 6,
+        "visited_samples": 24
+      },
+      "scenario": "coordinator_restart",
+      "seed": 9103
+    },
+    {
+      "allocator": "analytic-balanced",
+      "boundary_violations": 0,
+      "result": {
+        "command_count": 78,
+        "completed": true,
+        "completed_tasks": 6,
+        "distance_travelled": 350.761,
+        "duplicate_visits": 0,
+        "expired_assignments": 0,
+        "recovery_delay_seconds": null,
+        "rejected_intents": 0,
+        "scenario": "coordinator_restart",
+        "stale_assignment_rejections": 0,
+        "ticks": 35,
+        "total_samples": 24,
+        "total_tasks": 6,
+        "visited_samples": 24
+      },
+      "scenario": "coordinator_restart",
+      "seed": 9103
+    },
+    {
+      "allocator": "learned-balanced",
+      "boundary_violations": 0,
+      "result": {
+        "command_count": 78,
+        "completed": true,
+        "completed_tasks": 6,
+        "distance_travelled": 350.761,
+        "duplicate_visits": 0,
+        "expired_assignments": 0,
+        "recovery_delay_seconds": null,
+        "rejected_intents": 0,
+        "scenario": "coordinator_restart",
+        "stale_assignment_rejections": 0,
+        "ticks": 35,
+        "total_samples": 24,
+        "total_tasks": 6,
+        "visited_samples": 24
+      },
+      "scenario": "coordinator_restart",
+      "seed": 9103
+    }
+  ]
+}

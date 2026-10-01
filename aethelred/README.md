@@ -90,6 +90,52 @@ audit writes succeed. Model integrations must now provide a trusted attestation
 verifier to `ActiveReleaseVerifier(ledger, verifier)`; loading rechecks promotion
 requirements and attestation validity, including after journal recovery.
 
+## Offline allocator comparison
+
+The mapping coordinator accepts allocation proposals through `MappingAllocator`.
+It validates the entire batch before issuing task leases: vehicles must be idle,
+available, assigned to the mission, and healthy enough; tasks must be pending;
+no vehicle or task may appear twice. A proposed allocation does not authorise a
+vehicle command. Every resulting movement still uses the authenticated safety
+and command path.
+
+```bash
+python scripts/benchmark_mapping_allocators.py --output .artifacts/mapping-benchmark
+```
+
+This trains a four-coefficient ridge model offline to predict task duration from
+travel distance, speed, remaining route length, and sample count. Training uses
+seeds 0–63, validation uses 500–515, and the default mission comparison uses
+9100–9103. Overlapping splits are rejected before training. The candidate weights
+are immutable after loading; the coordinator has no training interface.
+
+Three allocators run matched layouts and fault schedules: nearest task, analytic
+batch balancing, and learned batch balancing. The analytic and learned variants
+search the same assignment combinations, isolating the cost model from the
+search method. The default suite runs 20 missions per allocator across nominal,
+unit loss, communications loss, stale sensors, and coordinator restart.
+
+`report.html` presents the comparison; `report.json` records individual outcomes,
+source hashes, environment, split provenance, model digest, and observed command
+boundary violations. Each mission retains its replay and verified journals.
+These synthetic results are descriptive and never activate a production release.
+Scenarios sharing a layout seed are correlated; 20 mission runs do not represent
+20 independent layouts or establish statistical significance.
+The learned candidate must improve mean completion ticks against both controls
+with full completion, zero duplicate visits, and zero observed command-boundary
+violations to clear the local comparison. Clearing that comparison alone does
+not establish operational readiness or approval.
+
+Run an individual experimental candidate with:
+
+```bash
+python scripts/run_mapping_mission.py --scenario comms_loss --layout-seed 9200 --allocator learned --model .artifacts/mapping-benchmark/duration-model.json --output .artifacts/learned-mapping
+```
+
+The recorded [reference experiment](experiments/mapping_allocator/README.md)
+includes the measured results and their limits. The nearest-task planner remains
+the default; the learned allocator is an explicit local research option.
+
 ## Testing
 
 ```bash

@@ -8,6 +8,11 @@ from uuid import UUID, uuid5
 
 from aethelred.runtime.audit import JsonlAuditJournal
 from aethelred.runtime.geometry import Position
+from aethelred.runtime.mapping_allocation import (
+    MappingAllocator,
+    NearestTaskAllocator,
+    TaskAssignment,
+)
 from aethelred.runtime.operational import Mission, MissionCapability, OperatingArea
 
 
@@ -65,6 +70,7 @@ class MappingVehicle:
     position: Position
     battery_reserve: float
     available: bool = True
+    speed: float = 8.0
 
 
 class MappingCoordinator:
@@ -75,7 +81,8 @@ class MappingCoordinator:
     """
 
     def __init__(self, mission: Mission, journal: JsonlAuditJournal,
-                 lease_duration: timedelta = timedelta(seconds=4)) -> None:
+                 lease_duration: timedelta = timedelta(seconds=4),
+                 allocator: MappingAllocator | None = None) -> None:
         if MissionCapability.MAP not in mission.allowed_capabilities:
             raise ValueError("Mapping requires the mission MAP capability")
         if lease_duration <= timedelta():
@@ -83,6 +90,7 @@ class MappingCoordinator:
         self.mission = mission
         self.journal = journal
         self.lease_duration = lease_duration
+        self.allocator = allocator or NearestTaskAllocator()
         self._tasks: dict[UUID, MissionTask] = {}
         for event in journal.read_all():
             if event["event_type"] == "mapping_grid_created":
@@ -132,7 +140,9 @@ class MappingCoordinator:
         for row in range(rows):
             for column in range(columns):
                 x, y = area.minimum.x + column * width, area.minimum.y + row * height
-                cell = OperatingArea(Position(x, y), Position(x + width, y + height))
+                right = area.maximum.x if column == columns - 1 else x + width
+                top = area.maximum.y if row == rows - 1 else y + height
+                cell = OperatingArea(Position(x, y), Position(right, top))
                 samples = tuple(Position(x + dx * width, y + dy * height)
                                 for dx, dy in ((.25, .25), (.75, .25), (.75, .75), (.25, .75)))
                 task = MissionTask(uuid5(self.mission.mission_id, f"{self.mission.revision}:{column}:{row}"),
@@ -152,17 +162,36 @@ class MappingCoordinator:
         eligible = [v for v in vehicles if v.available and v.vehicle_id not in occupied
                     and v.vehicle_id in self.mission.assigned_vehicle_ids
                     and isfinite(v.battery_reserve) and .25 <= v.battery_reserve <= 1
+                    and isfinite(v.speed) and v.speed > 0
                     and self.mission.operating_area.contains(v.position)]
         if len({v.vehicle_id for v in vehicles}) != len(vehicles):
             raise ValueError("Vehicle observations must be unique")
-        pending = [t for t in self.tasks if t.status is TaskStatus.PENDING]
-        for vehicle in sorted(eligible, key=lambda v: v.vehicle_id):
-            if not pending:
-                break
-            task = min(pending, key=lambda t: (vehicle.position.distance_to(t.target), str(t.task_id)))
-            pending.remove(task)
+        pending = {t.task_id: t for t in self.tasks if t.status is TaskStatus.PENDING}
+        if not eligible or not pending:
+            return
+        proposals = tuple(self.allocator.propose(tuple(sorted(eligible, key=lambda v: v.vehicle_id)),
+                                                 tuple(pending.values())))
+        known_vehicles = {v.vehicle_id for v in eligible}
+        seen_vehicles: set[str] = set()
+        seen_tasks: set[UUID] = set()
+        for proposal in proposals:
+            if (not isinstance(proposal, TaskAssignment) or proposal.vehicle_id not in known_vehicles
+                    or proposal.task_id not in pending or proposal.vehicle_id in seen_vehicles
+                    or proposal.task_id in seen_tasks):
+                self.journal.record("mapping_allocation_rejected", str(self.mission.mission_id),
+                                    {"allocator_id": self.allocator.allocator_id, "reason": "invalid_assignment"})
+                raise AssignmentError("Allocator proposed an unavailable, duplicate, or unknown assignment")
+            seen_vehicles.add(proposal.vehicle_id)
+            seen_tasks.add(proposal.task_id)
+        self.journal.record("mapping_allocation_proposed", str(self.mission.mission_id), {
+            "allocator_id": self.allocator.allocator_id,
+            "artifact_sha256": self.allocator.artifact_sha256,
+            "assignments": [{"vehicle_id": p.vehicle_id, "task_id": str(p.task_id)} for p in proposals],
+        })
+        for proposal in proposals:
+            task = pending[proposal.task_id]
             self._persist("assigned", replace(task, status=TaskStatus.ASSIGNED,
-                          vehicle_id=vehicle.vehicle_id, assignment_version=task.assignment_version + 1,
+                          vehicle_id=proposal.vehicle_id, assignment_version=task.assignment_version + 1,
                           lease_until=min(now + self.lease_duration, self.mission.valid_until)))
 
     def expire(self, now: datetime) -> None:
@@ -199,6 +228,8 @@ class MappingCoordinator:
     def record_sample(self, task_id: UUID, vehicle_id: str, version: int,
                       sample_index: int, now: datetime) -> None:
         task = self.owned(task_id, vehicle_id, version, now)
+        if type(sample_index) is not int or sample_index < 0:
+            raise AssignmentError("Sample index must be a non-negative integer")
         if task.status is not TaskStatus.RUNNING:
             raise AssignmentError("Task must be acknowledged before reporting progress")
         if sample_index < task.completed_samples:

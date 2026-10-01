@@ -5,6 +5,7 @@ simulator. It does not establish camera coverage, flight dynamics, or SIL eviden
 """
 
 import json
+import random
 import secrets
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime, timedelta
@@ -19,6 +20,7 @@ from aethelred.runtime.geometry import Position
 from aethelred.runtime.health import RuntimeHealthReport, RuntimeHealthSupervisor
 from aethelred.runtime.integrity import IntentAuthenticator
 from aethelred.runtime.lifecycle import RuntimeLifecycleSupervisor
+from aethelred.runtime.mapping_allocation import MappingAllocator
 from aethelred.runtime.mapping_tasks import (
     AssignmentError,
     MappingCoordinator,
@@ -42,6 +44,38 @@ from aethelred.runtime.operational import (
 )
 
 SCENARIOS = ("nominal", "unit_loss", "comms_loss", "stale_sensor", "coordinator_restart")
+
+
+@dataclass(frozen=True)
+class MappingLayout:
+    """Reproducible mission geometry and initial vehicle conditions."""
+
+    seed: int | None = None
+    width: float = 60.0
+    height: float = 40.0
+    columns: int = 3
+    rows: int = 2
+    positions: tuple[Position, ...] = (Position(2, 2), Position(30, 2), Position(58, 2))
+    speeds: tuple[float, ...] = (8.0, 8.0, 8.0)
+
+    def __post_init__(self) -> None:
+        if not 20 <= self.width <= 100 or not 20 <= self.height <= 80:
+            raise ValueError("Layout dimensions are outside the supported simulation range")
+        if not 1 <= self.columns <= 4 or not 1 <= self.rows <= 3:
+            raise ValueError("Layout grid dimensions are outside the supported range")
+        if len(self.positions) != 3 or len(self.speeds) != 3:
+            raise ValueError("Mapping layout requires exactly three units")
+        area = OperatingArea(Position(0, 0), Position(self.width, self.height))
+        if any(not area.contains(p) for p in self.positions) or any(not 0 < s <= 20 for s in self.speeds):
+            raise ValueError("Invalid initial vehicle positions or speeds")
+
+    @classmethod
+    def from_seed(cls, seed: int) -> "MappingLayout":
+        rng = random.Random(seed)
+        width, height = rng.uniform(40, 90), rng.uniform(25, 60)
+        return cls(seed, width, height, rng.choice((2, 3, 4)), rng.choice((2, 3)),
+                   tuple(Position(rng.uniform(0, width), rng.uniform(0, height)) for _ in range(3)),
+                   tuple(rng.uniform(4, 12) for _ in range(3)))
 
 
 @dataclass
@@ -103,7 +137,8 @@ class MappingResult:
 class MappingMissionSimulation:
     """Three-unit mission with deterministic allocation and explicit fault injection."""
 
-    def __init__(self, output: Path, scenario: str = "unit_loss", *, speed: float = 8.0) -> None:
+    def __init__(self, output: Path, scenario: str = "unit_loss", *, speed: float = 8.0,
+                 layout: MappingLayout | None = None, allocator: MappingAllocator | None = None) -> None:
         if scenario not in SCENARIOS:
             raise ValueError("Unknown mapping scenario")
         if not 0 < speed <= 20:
@@ -112,17 +147,25 @@ class MappingMissionSimulation:
             raise ValueError("Choose an empty output directory; existing mission evidence is preserved")
         output.mkdir(parents=True, exist_ok=True)
         self.output, self.scenario = output, scenario
+        self.layout = layout or MappingLayout(speeds=(speed, speed, speed))
+        self.allocator = allocator
         self.started_at = datetime.now(UTC)
         self.journal = JsonlAuditJournal(output / "coordinator.jsonl")
-        self.mission = Mission(uuid5(NAMESPACE_URL, "aethelred-mapping-demo/v1"), 1,
+        layout_digest = sha256(json.dumps(asdict(self.layout), sort_keys=True).encode()).hexdigest()
+        self.mission = Mission(uuid5(NAMESPACE_URL, f"aethelred-mapping-demo/v1:{layout_digest}"), 1,
                                self.started_at - timedelta(seconds=1),
                                self.started_at + timedelta(minutes=10),
                                frozenset({MissionCapability.MAP}),
                                frozenset({"mapper-1", "mapper-2", "mapper-3"}),
-                               OperatingArea(Position(0, 0), Position(60, 40)),
+                               OperatingArea(Position(0, 0), Position(self.layout.width, self.layout.height)),
                                frozenset({"mapping-planner"}))
-        self.coordinator = MappingCoordinator(self.mission, self.journal)
-        self.coordinator.create_grid()
+        self.coordinator = MappingCoordinator(self.mission, self.journal, allocator=allocator)
+        self.coordinator.create_grid(self.layout.columns, self.layout.rows)
+        self.journal.record("mapping_layout", str(self.mission.mission_id), {
+            "layout": asdict(self.layout), "layout_sha256": layout_digest,
+            "allocator_id": self.coordinator.allocator.allocator_id,
+            "experimental_model_sha256": self.coordinator.allocator.artifact_sha256,
+        })
         safety = OperationalSafetySupervisor()
         configuration = {
             "max_state_age_seconds": safety.max_state_age.total_seconds(),
@@ -130,11 +173,13 @@ class MappingMissionSimulation:
             "min_battery_reserve": safety.min_battery_reserve,
             "min_localisation_quality": safety.min_localisation_quality,
             "max_observation_uncertainty": safety.max_observation_uncertainty,
-            "simulated_speed": speed,
+            "layout": asdict(self.layout),
+            "allocator_id": self.coordinator.allocator.allocator_id,
+            "experimental_model_sha256": self.coordinator.allocator.artifact_sha256,
         }
         policy_digest = sha256(Path(__file__).read_bytes()).hexdigest()
         self.units = []
-        for index, x in enumerate((2., 30., 58.), start=1):
+        for index, (position, unit_speed) in enumerate(zip(self.layout.positions, self.layout.speeds, strict=True), start=1):
             vehicle_id = f"mapper-{index}"
             journal = JsonlAuditJournal(output / f"{vehicle_id}.jsonl")
             registry = MissionRegistry(journal)
@@ -150,7 +195,7 @@ class MappingMissionSimulation:
             health = RuntimeHealthSupervisor(journal, lifecycle, ("estimator", "adapter", "planner"))
             authenticator = IntentAuthenticator(secrets.token_bytes(32), journal)
             identity = RuntimeIdentity(self.mission.mission_id, f"mapping-demo:{policy_digest}",
-                                       policy_digest, config.sha256)
+                                       self.coordinator.allocator.artifact_sha256 or policy_digest, config.sha256)
             # Instantiate every safety parameter from the registered configuration.
             values = configs.active().values
             supervisor = OperationalSafetySupervisor(
@@ -163,8 +208,8 @@ class MappingMissionSimulation:
             loop = AuthenticatedOperationalControlLoop(
                 OperationalControlLoop(supervisor, journal, identity), authenticator,
                 registry, lifecycle, configs, health)
-            self.units.append(MappingUnit(MappingAdapter(vehicle_id, Position(x, 2), journal,
-                                                        self.started_at, speed), loop, authenticator, health))
+            self.units.append(MappingUnit(MappingAdapter(vehicle_id, position, journal,
+                                                        self.started_at, unit_speed), loop, authenticator, health))
 
     def run(self, max_ticks: int = 180) -> MappingResult:
         if not 1 <= max_ticks <= 300:
@@ -184,7 +229,7 @@ class MappingMissionSimulation:
                 self.journal.record("mapping_fault_injected", str(self.mission.mission_id),
                                     {"scenario": self.scenario, "tick": tick, "vehicle_id": "mapper-1"})
             if tick == 3 and self.scenario == "coordinator_restart":
-                self.coordinator = MappingCoordinator(self.mission, self.journal)
+                self.coordinator = MappingCoordinator(self.mission, self.journal, allocator=self.allocator)
                 self.journal.record("mapping_coordinator_restarted", str(self.mission.mission_id), {"tick": tick})
             if tick == 8 and self.scenario == "comms_loss":
                 self.units[0].online = True
@@ -197,7 +242,8 @@ class MappingMissionSimulation:
                         self.journal.record("mapping_stale_assignment_rejected", str(stale_token.task_id),
                                             {"tick": tick, "assignment_version": stale_token.assignment_version})
             self.coordinator.allocate(tuple(MappingVehicle(u.adapter.vehicle_id, u.adapter.position,
-                                                           u.adapter.battery, u.online) for u in self.units), now)
+                                                           u.adapter.battery, u.online, u.adapter.speed)
+                                                   for u in self.units), now)
             if stale_token is not None and recovery_delay is None:
                 current = next(t for t in self.coordinator.tasks if t.task_id == stale_token.task_id)
                 if current.assignment_version > stale_token.assignment_version:
