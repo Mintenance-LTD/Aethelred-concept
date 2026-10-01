@@ -53,6 +53,43 @@ python scripts/export_model.py --checkpoint checkpoints/best_policy.pt
 
 TensorBoard logs are written to `runs/`; checkpoints to `checkpoints/`.
 
+## Civilian mapping mission and recovery
+
+The deterministic mapping demonstration connects three units through the
+authenticated operational command path. A coordinator partitions a 60 by 40
+metre area into six cells with four sample locations each. Versioned assignment
+leases, acknowledgements, heartbeats, cancellation, and durable progress govern
+ownership. Units visit samples through safety-authorised commands; unfinished
+work is reallocated when an assignment expires.
+
+```bash
+python scripts/run_mapping_mission.py --scenario unit_loss --output .artifacts/mapping-unit-loss
+python scripts/run_mapping_mission.py --scenario comms_loss --output .artifacts/mapping-comms-loss
+python scripts/run_mapping_mission.py --scenario stale_sensor --output .artifacts/mapping-stale-sensor
+python scripts/run_mapping_mission.py --scenario coordinator_restart --output .artifacts/mapping-restart
+```
+
+Use `--scenario nominal` for the baseline. Each output directory must be empty.
+Open `replay.html` for a readable event timeline. `summary.json` reports sample
+completion, elapsed ticks, duplicate visits, travel distance, expired leases,
+rejected intents, and reassignment delay. Verified source journals and the full
+`replay.json` retain assignment, authentication, telemetry, safety, movement,
+command sequence, acknowledgement, and sample evidence.
+
+Mapping coverage here means visitation of specified sample points. This is an
+abstract 2-D movement and energy model, with a deterministic planner and local
+in-process communication. Camera coverage, flight dynamics, networking, learned
+allocation, and target-autopilot SIL remain separate qualification work. The
+task journal has one active coordinator writer; coordinator restart recovers
+existing leases and progress without extending authority. A full vehicle runtime
+restart still requires the lifecycle's explicit safe-state recovery procedure.
+
+Operational positions are copied into immutable values independent of tactical
+types. Configuration and release transitions expose new state only after their
+audit writes succeed. Model integrations must now provide a trusted attestation
+verifier to `ActiveReleaseVerifier(ledger, verifier)`; loading rechecks promotion
+requirements and attestation validity, including after journal recovery.
+
 ## Testing
 
 ```bash
